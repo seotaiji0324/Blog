@@ -133,7 +133,7 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetch(publicPath(isGitHubPagesDeployment() ? "/playlist.json" : "/api/playlist"))
+    fetch(publicPath(isGitHubPagesDeployment() ? "/playlist.json" : "/api/playlist"), { cache: "no-store" })
       .then((response) => response.json())
       .then((body: { entries?: Array<Record<string, unknown>> }) => {
         if (!active || !body.entries) return;
@@ -348,6 +348,8 @@ export default function Home() {
                     ) : <strong>{track.title}</strong>}
                     <span>{track.artist}</span>
                     {track.uploadedAudio && track.musicUrl && (
+                      // The uploaded previews contain music only and no spoken dialogue.
+                      // eslint-disable-next-line jsx-a11y/media-has-caption
                       <audio
                         aria-label={`${track.artist}의 ${track.title} 재생`}
                         className="track-audio"
