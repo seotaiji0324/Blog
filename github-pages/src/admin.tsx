@@ -25,6 +25,7 @@ type PlaylistEntry = {
 
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
 type MemberProfile = { username: string; role: string; is_active: boolean };
+type DatabaseError = { code?: string };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -38,6 +39,12 @@ const genres = ["댄스 팝", "힙합", "R&B", "일렉트로닉", "록", "발라
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
 const ADMIN_USERNAME = "seotaiji0324";
 const ADMIN_AUTH_EMAIL = `${ADMIN_USERNAME}@admin.seoulwave.app`;
+
+function playlistWriteError(error: DatabaseError, editing: boolean) {
+  if (error.code === "23502") return "필수 저장 항목이 비어 있습니다. 입력 내용을 확인해 주세요.";
+  if (error.code === "42501") return "관리자 저장 권한을 확인하지 못했습니다. 다시 로그인해 주세요.";
+  return editing ? "PLAYLIST 정보를 수정하지 못했습니다." : "PLAYLIST 정보를 저장하지 못했습니다.";
+}
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -277,7 +284,8 @@ function Dashboard({ session }: { session: Session }) {
         release_year: releaseYear,
         music_url: textValue(data.get("musicUrl")) || null,
         cover_image_url: textValue(data.get("coverImageUrl")) || null,
-        description: textValue(data.get("description")) || null,
+        // PlayList.description is NOT NULL; an empty optional description is stored as an empty string.
+        description: textValue(data.get("description")),
         display_order: numberOrNull(data.get("displayOrder")) ?? 0,
         is_active: data.get("isActive") === "on",
         created_by: editing ? undefined : session.user.id,
@@ -291,7 +299,7 @@ function Dashboard({ session }: { session: Session }) {
         ? supabase.from("PlayList").update(payload).eq("id", editing.id)
         : supabase.from("PlayList").insert(payload);
       const { error } = await query.select("id").single();
-      if (error) throw new Error(editing ? "PLAYLIST 정보를 수정하지 못했습니다." : "PLAYLIST 정보를 저장하지 못했습니다.");
+      if (error) throw new Error(playlistWriteError(error, Boolean(editing)));
 
       if (editing?.audio_path && editing.audio_path !== payload.audio_path) {
         await supabase.storage.from("kpop-audio").remove([editing.audio_path]);
