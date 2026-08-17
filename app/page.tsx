@@ -137,28 +137,62 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetch(publicPath(isGitHubPagesDeployment() ? "/playlist.json" : "/api/playlist"), { cache: "no-store" })
-      .then((response) => response.json())
-      .then((body: { entries?: Array<Record<string, unknown>> }) => {
-        if (!active || !body.entries) return;
-        setPlaylistTracks(
-          body.entries.map((entry) => ({
-            id: String(entry.id),
-            title: String(entry.title),
-            artist: String(entry.artist),
-            mood: String(entry.genre),
-            year: entry.release_year ? String(entry.release_year) : "—",
-            musicUrl: entry.playback_url
-              ? String(entry.playback_url)
-              : entry.music_url
-                ? String(entry.music_url)
-                : null,
-            uploadedAudio: Boolean(entry.audio_path && entry.playback_url),
-          })),
-        );
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
+    const pagesDeployment = isGitHubPagesDeployment();
+    const playlistBridge = pagesDeployment ? window.__SEOULWAVE_PLAYLIST__ : undefined;
+
+    const applyPlaylist = (body: { entries?: Array<Record<string, unknown>> }) => {
+      if (!active || !body.entries) return;
+      setPlaylistTracks(
+        body.entries.map((entry) => ({
+          id: String(entry.id),
+          title: String(entry.title),
+          artist: String(entry.artist),
+          mood: String(entry.genre),
+          year: entry.release_year ? String(entry.release_year) : "—",
+          musicUrl: entry.playback_url
+            ? String(entry.playback_url)
+            : entry.music_url
+              ? String(entry.music_url)
+              : null,
+          uploadedAudio: Boolean(entry.audio_path && entry.playback_url),
+        })),
+      );
+    };
+
+    const loadPlaylist = async () => {
+      try {
+        if (playlistBridge) {
+          applyPlaylist(await playlistBridge.load());
+          return;
+        }
+        const response = await fetch(publicPath(pagesDeployment ? "/playlist.json" : "/api/playlist"), { cache: "no-store" });
+        applyPlaylist(await response.json());
+      } catch {
+        if (!pagesDeployment || !playlistBridge) return;
+        try {
+          const fallback = await fetch(publicPath("/playlist.json"), { cache: "no-store" });
+          applyPlaylist(await fallback.json());
+        } catch {
+          // Keep the last successfully loaded playlist if both live and snapshot sources fail.
+        }
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void loadPlaylist();
+    };
+
+    void loadPlaylist();
+    const unsubscribe = playlistBridge?.subscribe(() => void loadPlaylist());
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
 
   const filteredStories = useMemo(() => {

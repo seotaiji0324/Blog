@@ -306,8 +306,8 @@ function Dashboard({ session }: { session: Session }) {
       }
       uploadedPath = null;
       setNotice({ tone: "success", text: editing
-        ? "PLAYLIST 곡 정보를 수정했습니다. 메인 화면에는 최대 30분 이내 반영됩니다."
-        : "MP3와 곡 정보를 저장했습니다. 메인 화면에는 최대 30분 이내 반영됩니다." });
+        ? "PLAYLIST 곡 정보를 수정했습니다. 공개 화면에 즉시 반영됩니다."
+        : "MP3와 곡 정보를 저장했습니다. 공개 화면에 즉시 반영됩니다." });
       setEditing(null);
       setAudioFile(null);
       form.reset();
