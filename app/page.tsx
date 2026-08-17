@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 
 type Story = {
@@ -110,10 +110,10 @@ type PlaylistTrack = {
 
 const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
 const GITHUB_PAGES_BASE = "/Blog";
-const ADMIN_SITE_URL = "https://seoulwave-kpop-blog.samsungsdscoe.chatgpt.site/admin";
 
 function isGitHubPagesDeployment() {
-  return typeof window !== "undefined" && window.location.hostname === "seotaiji0324.github.io";
+  return typeof window !== "undefined"
+    && (window.location.hostname === "seotaiji0324.github.io" || window.location.pathname.startsWith(`${GITHUB_PAGES_BASE}/`));
 }
 
 function publicPath(path: string) {
@@ -121,15 +121,19 @@ function publicPath(path: string) {
 }
 
 function adminPath() {
-  return isGitHubPagesDeployment() ? ADMIN_SITE_URL : "/admin";
+  return isGitHubPagesDeployment() ? publicPath("/admin/") : "/admin";
 }
 
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("전체");
   const [query, setQuery] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [queuePlaying, setQueuePlaying] = useState(false);
+  const [queueRepeat, setQueueRepeat] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
+  const queueAudioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -170,10 +174,68 @@ export default function Home() {
     });
   }, [activeCategory, query]);
 
+  const playableQueue = useMemo(
+    () => queue
+      .map((title) => playlistTracks.find((track) => track.title === title))
+      .filter((track): track is PlaylistTrack => Boolean(track?.uploadedAudio && track.musicUrl)),
+    [playlistTracks, queue],
+  );
+  const currentQueueTrack = playableQueue[queueIndex] ?? playableQueue[0] ?? null;
+
   const toggleQueue = (title: string) => {
-    setQueue((current) =>
-      current.includes(title) ? current.filter((item) => item !== title) : [...current, title],
-    );
+    setQueue((current) => {
+      if (!current.includes(title)) return [...current, title];
+      if (currentQueueTrack?.title === title) {
+        queueAudioRef.current?.pause();
+        setQueuePlaying(false);
+        setQueueIndex(0);
+      }
+      return current.filter((item) => item !== title);
+    });
+  };
+
+  const toggleQueuePlayback = async () => {
+    const audio = queueAudioRef.current;
+    if (!audio || !currentQueueTrack?.musicUrl) return;
+    if (!audio.paused) {
+      audio.pause();
+      return;
+    }
+    if (audio.dataset.trackTitle !== currentQueueTrack.title) {
+      audio.src = currentQueueTrack.musicUrl;
+      audio.dataset.trackTitle = currentQueueTrack.title;
+      audio.load();
+    }
+    document.querySelectorAll<HTMLAudioElement>("#playlist .track-audio").forEach((item) => item.pause());
+    try {
+      await audio.play();
+      setQueuePlaying(true);
+    } catch {
+      setQueuePlaying(false);
+    }
+  };
+
+  const advanceQueue = (audio = queueAudioRef.current) => {
+    if (!audio || playableQueue.length === 0) return;
+    const activeIndex = Math.max(0, playableQueue.findIndex((track) => track.title === currentQueueTrack?.title));
+    const reachedEnd = activeIndex >= playableQueue.length - 1;
+    if (reachedEnd && !queueRepeat) {
+      audio.pause();
+      audio.currentTime = 0;
+      setQueuePlaying(false);
+      return;
+    }
+    const nextIndex = reachedEnd ? 0 : activeIndex + 1;
+    const nextTrack = playableQueue[nextIndex];
+    if (!nextTrack?.musicUrl) return;
+    setQueueIndex(nextIndex);
+    audio.src = nextTrack.musicUrl;
+    audio.dataset.trackTitle = nextTrack.title;
+    audio.load();
+    audio.currentTime = 0;
+    void audio.play()
+      .then(() => setQueuePlaying(true))
+      .catch(() => setQueuePlaying(false));
   };
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -324,8 +386,43 @@ export default function Home() {
             <p>
               서로 다른 결의 큐레이션으로 K-pop의 넓은 스펙트럼을 만나보세요. 첨부된 MP3는 바로 재생하고, 공식 링크가 등록된 곡은 제목을 눌러 감상할 수 있습니다.
             </p>
-            <div className="queue-counter" aria-live="polite">
-              <span>MY QUEUE</span><strong>{String(queue.length).padStart(2, "0")}</strong>
+            <div className="queue-player">
+              <div className="queue-counter" aria-live="polite">
+                <span>MY QUEUE</span><strong>{String(queue.length).padStart(2, "0")}</strong>
+              </div>
+              <div className="queue-actions">
+                <button disabled={!currentQueueTrack} onClick={() => void toggleQueuePlayback()} type="button">
+                  {queuePlaying ? "일시정지" : "선택곡 재생"}
+                </button>
+                <button disabled={playableQueue.length < 2} onClick={() => advanceQueue()} type="button">다음 곡</button>
+                <button
+                  aria-pressed={queueRepeat}
+                  disabled={playableQueue.length === 0}
+                  onClick={() => setQueueRepeat((current) => !current)}
+                  type="button"
+                >
+                  반복 {queueRepeat ? "ON" : "OFF"}
+                </button>
+              </div>
+              {currentQueueTrack ? (
+                <div className="queue-now" aria-live="polite">
+                  <span>NOW IN QUEUE</span>
+                  <strong>{currentQueueTrack.title}</strong>
+                  <small>{currentQueueTrack.artist}</small>
+                  {/* Music-only previews contain no spoken dialogue. */}
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <audio
+                    controls
+                    onEnded={(event) => advanceQueue(event.currentTarget)}
+                    onPause={() => setQueuePlaying(false)}
+                    onPlay={() => setQueuePlaying(true)}
+                    preload="metadata"
+                    ref={queueAudioRef}
+                  />
+                </div>
+              ) : (
+                <p className="queue-empty">오른쪽 + 버튼으로 반복 재생할 곡을 선택하세요.</p>
+              )}
             </div>
           </div>
           <ol className="track-list">
@@ -354,6 +451,10 @@ export default function Home() {
                         aria-label={`${track.artist}의 ${track.title} 재생`}
                         className="track-audio"
                         controls
+                        onPlay={() => {
+                          queueAudioRef.current?.pause();
+                          setQueuePlaying(false);
+                        }}
                         preload="none"
                         src={track.musicUrl}
                       />

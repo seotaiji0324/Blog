@@ -718,6 +718,80 @@ h2 em {
   width: 36px;
 }
 
+.queue-player {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.queue-actions button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  color: white;
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  min-height: 38px;
+  padding: 0.65rem 0.85rem;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.queue-actions button:hover:not(:disabled),
+.queue-actions button:focus-visible,
+.queue-actions button[aria-pressed="true"] {
+  background: var(--acid);
+  border-color: var(--acid);
+  color: var(--ink);
+}
+
+.queue-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.queue-now {
+  background: rgba(216, 193, 154, 0.1);
+  border-left: 3px solid var(--acid);
+  display: grid;
+  gap: 0.2rem;
+  max-width: 430px;
+  padding: 0.9rem 1rem;
+  width: 100%;
+}
+
+.queue-now > span,
+.queue-now > small,
+.queue-empty {
+  color: rgba(255, 255, 255, 0.58);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.09em;
+}
+
+.queue-now > strong {
+  font-size: 1.05rem;
+}
+
+.queue-now audio {
+  color-scheme: dark;
+  height: 34px;
+  margin-top: 0.55rem;
+  max-width: 100%;
+}
+
+.queue-empty {
+  margin: 0;
+}
+
 .track-list {
   list-style: none;
   margin: 0;
