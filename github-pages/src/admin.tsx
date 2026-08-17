@@ -24,6 +24,7 @@ type PlaylistEntry = {
 };
 
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
+type MemberProfile = { username: string; role: string; is_active: boolean };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -35,6 +36,8 @@ const supabase = supabaseUrl && supabaseKey
 
 const genres = ["댄스 팝", "힙합", "R&B", "일렉트로닉", "록", "발라드", "기타"];
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+const ADMIN_USERNAME = "seotaiji0324";
+const ADMIN_AUTH_EMAIL = `${ADMIN_USERNAME}@admin.seoulwave.app`;
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -66,6 +69,36 @@ function App() {
       <Shell>
         <StatusCard title="관리자 권한이 없습니다" text="허용된 SEOULWAVE 관리자 계정으로 다시 로그인해 주세요.">
           <button className="button primary" onClick={() => void supabase.auth.signOut()} type="button">다른 계정으로 로그인</button>
+        </StatusCard>
+      </Shell>
+    );
+  }
+  return <MemberGate session={session} />;
+}
+
+function MemberGate({ session }: { session: Session }) {
+  const [member, setMember] = useState<MemberProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase
+      .from("member")
+      .select("username,role,is_active")
+      .eq("auth_user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setMember(data as MemberProfile | null);
+        setLoading(false);
+      });
+  }, [session.user.id]);
+
+  if (loading) return <Shell><StatusCard title="관리자 권한 확인 중" text="member 테이블과 인증 역할을 확인하고 있습니다." loading /></Shell>;
+  if (!member || member.username !== ADMIN_USERNAME || member.role !== "admin" || !member.is_active) {
+    return (
+      <Shell>
+        <StatusCard title="관리자 권한이 없습니다" text="활성화된 SEOULWAVE 관리자 계정으로 다시 로그인해 주세요.">
+          <button className="button primary" onClick={() => void supabase?.auth.signOut()} type="button">다른 계정으로 로그인</button>
         </StatusCard>
       </Shell>
     );
@@ -106,24 +139,27 @@ function StatusCard({ children, loading, text, title }: { children?: React.React
 }
 
 function Login() {
-  const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
-  const requestMagicLink = async (event: FormEvent<HTMLFormElement>) => {
+  const signIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!supabase) return;
-    setSending(true);
+    setSigningIn(true);
     setNotice(null);
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}admin/`;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
-    });
-    setSending(false);
-    setNotice(error
-      ? { tone: "error", text: "로그인 메일을 보내지 못했습니다. 관리자 이메일과 연결 설정을 확인해 주세요." }
-      : { tone: "success", text: "관리자 이메일로 로그인 링크를 보냈습니다. 메일의 링크를 선택해 주세요." });
+    if (username.trim().toLowerCase() !== ADMIN_USERNAME) {
+      setSigningIn(false);
+      setNotice({ tone: "error", text: "관리자 사용자명 또는 비밀번호를 확인해 주세요." });
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_AUTH_EMAIL, password });
+    setSigningIn(false);
+    if (error) {
+      setPassword("");
+      setNotice({ tone: "error", text: "관리자 사용자명 또는 비밀번호를 확인해 주세요." });
+    }
   };
 
   return (
@@ -134,22 +170,26 @@ function Login() {
           <h1>CURATE<br /><em>THE WAVE.</em></h1>
           <p>승인된 관리자만 PLAYLIST와 MP3 파일을 등록하거나 수정할 수 있습니다.</p>
           <dl>
-            <div><dt>01</dt><dd>이메일 링크 인증</dd></div>
-            <div><dt>02</dt><dd>Supabase RLS 권한 확인</dd></div>
+            <div><dt>01</dt><dd>관리자 사용자명·비밀번호 인증</dd></div>
+            <div><dt>02</dt><dd>member·RLS 권한 확인</dd></div>
             <div><dt>03</dt><dd>PLAYLIST 안전 저장</dd></div>
           </dl>
         </div>
-        <form className="login-card" onSubmit={requestMagicLink}>
+        <form className="login-card" onSubmit={signIn}>
           <span>SEOULWAVE CONTROL ROOM</span>
           <h2>관리자 로그인</h2>
-          <p>등록된 관리자 이메일로 일회용 로그인 링크를 보내드립니다.</p>
+          <p>등록된 관리자 사용자명과 비밀번호로 로그인해 주세요.</p>
           <label>
-            <span>ADMIN EMAIL</span>
-            <input autoComplete="email" name="email" onChange={(event) => setEmail(event.target.value)} placeholder="name@company.com" required type="email" value={email} />
+            <span>ADMIN USERNAME</span>
+            <input autoCapitalize="none" autoComplete="username" name="username" onChange={(event) => setUsername(event.target.value)} placeholder="관리자 사용자명" required value={username} />
           </label>
-          <button className="button primary" disabled={sending} type="submit">{sending ? "메일 전송 중..." : "로그인 링크 받기"}<b>↗</b></button>
+          <label>
+            <span>PASSWORD</span>
+            <input autoComplete="current-password" name="password" onChange={(event) => setPassword(event.target.value)} placeholder="비밀번호" required type="password" value={password} />
+          </label>
+          <button className="button primary" disabled={signingIn} type="submit">{signingIn ? "권한 확인 중..." : "관리자 로그인"}<b>↗</b></button>
           {notice && <p className={`notice ${notice.tone}`} role="status">{notice.text}</p>}
-          <small>개인정보나 비밀번호를 곡 정보·파일명에 입력하지 마세요.</small>
+          <small>비밀번호는 Supabase Auth에서만 검증되며 member 테이블이나 브라우저에 저장하지 않습니다.</small>
         </form>
       </section>
     </Shell>

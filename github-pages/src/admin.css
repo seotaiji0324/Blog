@@ -37,6 +37,7 @@ footer { border-top:1px solid var(--ink); font:500 .62rem "DM Mono",monospace; l
 .login-card h2 { font-size:2.2rem; letter-spacing:-.05em; margin:1.3rem 0 .7rem; }
 .login-card>p { color:rgba(255,255,255,.6); font-size:.83rem; line-height:1.7; }
 .login-card label { display:grid; gap:.7rem; margin:2.3rem 0 1rem; }
+.login-card label + label { margin-top:1rem; }
 .login-card label span { color:var(--violet-soft); font:500 .62rem "DM Mono",monospace; }
 .login-card input { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.25); color:white; min-height:54px; outline:none; padding:0 1rem; }
 .login-card input:focus { border-color:var(--violet-soft); }
