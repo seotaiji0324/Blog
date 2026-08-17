@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 
 type Story = {
   id: string;
@@ -11,6 +12,8 @@ type Story = {
   summary: string;
   readTime: string;
   cover: string;
+  image: string;
+  imageAlt: string;
   note: string;
 };
 
@@ -24,6 +27,8 @@ const stories: Story[] = [
     summary: "멜로디, 퍼포먼스, 세계관. 취향을 찾는 가장 쉬운 세 갈래 입문 지도.",
     readTime: "4 MIN",
     cover: "cover-coral",
+    image: "/story-01-discover.png",
+    imageAlt: "코발트 조명의 레코드 숍에서 음악을 탐색하는 가상의 K-pop 팬",
     note: "한 곡의 후렴을 먼저 듣고, 무대 영상으로 안무를 본 뒤, 앨범 전체의 흐름을 따라가 보세요. K-pop은 소리와 이미지가 함께 완성되는 장르이기 때문에 이 세 단계를 오갈 때 매력이 가장 선명해집니다.",
   },
   {
@@ -35,6 +40,8 @@ const stories: Story[] = [
     summary: "힙합에서 일렉트로닉으로, 다시 팝으로. 역동적인 송폼을 듣는 방법.",
     readTime: "6 MIN",
     cover: "cover-blue",
+    image: "/story-02-sound.png",
+    imageAlt: "푸른빛 녹음실의 믹싱 콘솔에서 사운드를 만드는 가상의 K-pop 프로듀서",
     note: "벌스와 프리코러스, 후렴의 리듬이 어떻게 달라지는지 표시하며 들어보세요. 서로 다른 장르를 이어 붙이는 전환부와, 모든 파트를 하나로 묶는 반복 훅이 K-pop 프로덕션의 긴장감을 만듭니다.",
   },
   {
@@ -46,6 +53,8 @@ const stories: Story[] = [
     summary: "포인트 안무, 대형 변화, 표정 연기까지 무대를 읽는 세 가지 시선.",
     readTime: "5 MIN",
     cover: "cover-lime",
+    image: "/story-03-performance.png",
+    imageAlt: "미래적인 무대에서 군무를 펼치는 가상의 5인조 K-pop 퍼포먼스 그룹",
     note: "전체 대형을 보는 고정 카메라와 표정을 담는 방송 카메라를 번갈아 비교해 보세요. 같은 안무도 시선의 방향과 화면 전환에 따라 전혀 다른 장면으로 읽힙니다.",
   },
   {
@@ -57,6 +66,8 @@ const stories: Story[] = [
     summary: "관객이 소비자를 넘어 공연의 일부가 되는 K-pop 팬 문화 이야기.",
     readTime: "7 MIN",
     cover: "cover-violet",
+    image: "/story-04-fandom.png",
+    imageAlt: "푸른빛 응원봉을 들고 공연을 함께 즐기는 K-pop 팬들",
     note: "팬 컬러, 응원법, 생일 광고처럼 팬덤은 음악 밖에서도 고유한 언어를 만듭니다. 이 문화는 지역마다 새롭게 번역되며 K-pop을 세계적인 참여형 경험으로 확장합니다.",
   },
   {
@@ -68,6 +79,8 @@ const stories: Story[] = [
     summary: "리드, 하모니, 애드리브를 따라가며 그룹 보컬의 층을 발견해 보세요.",
     readTime: "5 MIN",
     cover: "cover-yellow",
+    image: "/story-05-vocal.png",
+    imageAlt: "어두운 스튜디오에서 헤드폰을 쓰고 노래하는 가상의 K-pop 보컬리스트",
     note: "처음에는 리드 보컬만, 두 번째에는 코러스와 낮게 깔린 화음을 들어보세요. 마지막 후렴에서 더해지는 애드리브까지 찾으면 한 곡의 감정선이 어떻게 커지는지 느낄 수 있습니다.",
   },
   {
@@ -79,11 +92,23 @@ const stories: Story[] = [
     summary: "색, 오브제, 편집 리듬으로 읽는 K-pop 비주얼 스토리텔링.",
     readTime: "8 MIN",
     cover: "cover-red",
+    image: "/story-06-visual.png",
+    imageAlt: "거울과 크롬 오브제가 있는 미래적인 뮤직비디오 세트의 가상 퍼포머",
     note: "반복해서 등장하는 색과 오브제를 메모해 보세요. 가사와 직접 연결되지 않는 이미지도 편집의 속도와 화면 구도를 통해 곡의 정서를 강화하고 다음 이야기의 단서가 됩니다.",
   },
 ];
 
-const tracks = [
+type PlaylistTrack = {
+  id?: string;
+  artist: string;
+  title: string;
+  mood: string;
+  year: string;
+  musicUrl?: string | null;
+  uploadedAudio?: boolean;
+};
+
+const fallbackTracks: PlaylistTrack[] = [
   { artist: "BTS", title: "Dynamite", mood: "DISCO POP", year: "2020" },
   { artist: "NewJeans", title: "Super Shy", mood: "DANCE POP", year: "2023" },
   { artist: "aespa", title: "Next Level", mood: "ELECTRO", year: "2021" },
@@ -98,6 +123,33 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
   const [letterOpen, setLetterOpen] = useState(false);
+  const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>(fallbackTracks);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/playlist")
+      .then((response) => response.json())
+      .then((body: { entries?: Array<Record<string, unknown>> }) => {
+        if (!active || !body.entries?.length) return;
+        setPlaylistTracks(
+          body.entries.map((entry) => ({
+            id: String(entry.id),
+            title: String(entry.title),
+            artist: String(entry.artist),
+            mood: String(entry.genre),
+            year: entry.release_year ? String(entry.release_year) : "—",
+            musicUrl: entry.playback_url
+              ? String(entry.playback_url)
+              : entry.music_url
+                ? String(entry.music_url)
+                : null,
+            uploadedAudio: Boolean(entry.audio_path && entry.playback_url),
+          })),
+        );
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const filteredStories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -129,9 +181,9 @@ export default function Home() {
 
       <div className="ticker" aria-hidden="true">
         <div className="ticker-track">
-          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
-          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
-          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
+          <span>NEW WAVE / LIVE NOW / SEOUL 37.5665° N</span>
+          <span>NEW WAVE / LIVE NOW / SEOUL 37.5665° N</span>
+          <span>NEW WAVE / LIVE NOW / SEOUL 37.5665° N</span>
         </div>
       </div>
 
@@ -143,6 +195,7 @@ export default function Home() {
           <a href="#stories">STORIES</a>
           <a href="#playlist">PLAYLIST</a>
           <a href="#culture">CULTURE</a>
+          <a href="/admin">ADMIN</a>
         </nav>
         <a className="header-cta" href="#letter">WEEKLY DROP <span aria-hidden="true">↗</span></a>
       </header>
@@ -150,10 +203,10 @@ export default function Home() {
       <main id="main-content">
         <section className="hero" id="top">
           <div className="hero-copy">
-            <p className="eyebrow"><span>ISSUE 001</span> THE BEGINNER&apos;S EDIT</p>
-            <h1>K-POP IS<br />A WORLD<br />IN <em>MOTION.</em></h1>
+            <p className="eyebrow"><span>ISSUE 001</span> THE NEXT GENERATION</p>
+            <h1>K-POP<br />BEYOND<br /><em>THE FRAME.</em></h1>
             <p className="hero-description">
-              노래 한 곡에서 시작해 무대, 스타일, 팬 문화까지.<br />K-pop을 더 깊고 재미있게 듣는 매거진.
+              사운드와 퍼포먼스, 서울의 밤이 만나는 순간.<br />지금 가장 선명한 K-pop을 기록하는 디지털 매거진.
             </p>
             <div className="hero-actions">
               <a className="button button-dark" href="#stories">이야기 탐색하기 <span>↘</span></a>
@@ -161,26 +214,23 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="hero-art" aria-label="네온 콘서트 무대를 연상시키는 추상 그래픽">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="hero-disc">
-              <span>SEOUL</span><strong>WAVE</strong><span>PLAY IT LOUD</span>
+          <div className="hero-art">
+            <img
+              alt="코발트 조명 아래 공연하는 가상의 K-pop 퍼포먼스 그룹"
+              className="hero-photo"
+              fetchPriority="high"
+              src="/hero-stage-v2.png"
+            />
+            <div className="hero-image-meta" aria-hidden="true">
+              <span>SEOUL / 22:14</span>
+              <span>LIVE SIGNAL 001</span>
             </div>
-            <div className="art-card art-card-left">
-              <small>NOW PLAYING</small><strong>FEEL THE<br />RHYTHM</strong><span>33⅓ RPM</span>
-            </div>
-            <div className="art-card art-card-right">
-              <span className="barcode">|||| ||| ||||</span><strong>SEOUL<br />AFTER<br />DARK</strong><small>VOL. 01</small>
-            </div>
-            <div className="spark spark-one">✦</div>
-            <div className="spark spark-two">✦</div>
           </div>
         </section>
 
         <section className="issue-strip" aria-label="이번 호 요약">
           <div><span>CURATED STORIES</span><strong>06</strong></div>
-          <div><span>SOUNDS TO EXPLORE</span><strong>05</strong></div>
+          <div><span>SOUNDS TO EXPLORE</span><strong>{String(playlistTracks.length).padStart(2, "0")}</strong></div>
           <div><span>LANGUAGE</span><strong>KR / EN</strong></div>
           <div className="issue-stamp"><span>NEW DROP</span><strong>MONDAY</strong></div>
         </section>
@@ -226,6 +276,13 @@ export default function Home() {
             {filteredStories.map((story) => (
               <article className="story-card" key={story.id}>
                 <div className={`story-cover ${story.cover}`}>
+                  <Image
+                    alt={story.imageAlt}
+                    className="story-cover-image"
+                    fill
+                    sizes="(max-width: 700px) 100vw, (max-width: 980px) 50vw, 33vw"
+                    src={story.image}
+                  />
                   <span className="cover-issue">SW / {story.id}</span>
                   <span className="cover-word">{story.issue.split(" ")[0]}</span>
                   <span className="cover-number">{story.id}</span>
@@ -257,21 +314,37 @@ export default function Home() {
         <section className="playlist" id="playlist">
           <div className="playlist-copy">
             <p className="eyebrow light">LISTENING ROOM / 입문 플레이리스트</p>
-            <h2>FIVE TRACKS.<br /><em>ONE BIG WAVE.</em></h2>
+            <h2>CURATED TRACKS.<br /><em>ONE DISTINCT WAVE.</em></h2>
             <p>
-              서로 다른 결의 다섯 곡으로 K-pop의 넓은 스펙트럼을 만나보세요. 재생 기능 대신 마음에 드는 곡을 나만의 큐에 담아둘 수 있습니다.
+              서로 다른 결의 큐레이션으로 K-pop의 넓은 스펙트럼을 만나보세요. 첨부된 MP3는 바로 재생하고, 공식 링크가 등록된 곡은 제목을 눌러 감상할 수 있습니다.
             </p>
             <div className="queue-counter" aria-live="polite">
               <span>MY QUEUE</span><strong>{String(queue.length).padStart(2, "0")}</strong>
             </div>
           </div>
           <ol className="track-list">
-            {tracks.map((track, index) => {
+            {playlistTracks.map((track, index) => {
               const selected = queue.includes(track.title);
               return (
-                <li key={track.title}>
+                <li key={track.id ?? track.title}>
                   <span className="track-index">{String(index + 1).padStart(2, "0")}</span>
-                  <div className="track-name"><strong>{track.title}</strong><span>{track.artist}</span></div>
+                  <div className="track-name">
+                    {track.uploadedAudio ? (
+                      <strong>{track.title}</strong>
+                    ) : track.musicUrl ? (
+                      <a href={track.musicUrl} target="_blank" rel="noreferrer"><strong>{track.title}</strong></a>
+                    ) : <strong>{track.title}</strong>}
+                    <span>{track.artist}</span>
+                    {track.uploadedAudio && track.musicUrl && (
+                      <audio
+                        aria-label={`${track.artist}의 ${track.title} 재생`}
+                        className="track-audio"
+                        controls
+                        preload="none"
+                        src={track.musicUrl}
+                      />
+                    )}
+                  </div>
                   <span className="track-mood">{track.mood} / {track.year}</span>
                   <button
                     aria-label={`${track.title} ${selected ? "큐에서 빼기" : "큐에 담기"}`}
@@ -332,7 +405,7 @@ export default function Home() {
         <div className="footer-brand">SEOUL<span>WAVE</span></div>
         <p>K-POP MUSIC, CULTURE &amp; STORIES<br />CURATED IN SEOUL.</p>
         <div className="footer-links">
-          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a>
+          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a><a href="/admin">ADMIN</a>
         </div>
         <small>© 2026 SEOULWAVE. EDITORIAL DEMO.</small>
       </footer>
