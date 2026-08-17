@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: "github-pages",
   base: "/Blog/",
+  envDir: "..",
   publicDir: "../public",
   resolve: {
     alias: {
