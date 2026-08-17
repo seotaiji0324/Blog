@@ -8,6 +8,7 @@ const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
 const SIGNED_URL_SECONDS = 60 * 60;
 
 type PlaylistInput = {
+  id?: unknown;
   action?: unknown;
   fileName?: unknown;
   fileSize?: unknown;
@@ -32,15 +33,38 @@ type SupabaseConfig = {
   secretKey: string;
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   const config = getSupabaseConfig();
+  const adminView = new URL(request.url).searchParams.get("view") === "admin";
+
+  if (adminView) {
+    const user = await getChatGPTUser();
+    if (!user) return json({ error: "로그인이 필요합니다." }, 401);
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    if (!isLocalDevelopmentUser(user) && (!adminEmail || user.email.trim().toLowerCase() !== adminEmail)) {
+      return json({ error: "관리자 권한이 없습니다." }, 403);
+    }
+    if (!config) return json({ error: "DB 연결 설정이 완료되지 않았습니다." }, 503);
+
+    try {
+      const result = await fetch(
+        `${config.url}/rest/v1/PlayList?select=id,title,artist,album,genre,release_year,music_url,cover_image_url,description,display_order,is_active,audio_path,audio_filename,audio_size_bytes,created_at&order=display_order.asc,created_at.desc`,
+        { headers: supabaseAuthHeaders(config), cache: "no-store" },
+      );
+      if (!result.ok) return json({ error: "PLAYLIST 목록을 불러오지 못했습니다." }, 502);
+      return json({ entries: await result.json() }, 200);
+    } catch {
+      return json({ error: "DB에 연결하지 못했습니다." }, 502);
+    }
+  }
+
   if (!config) return json({ entries: [] }, 200);
 
   try {
     const result = await fetch(
       `${config.url}/rest/v1/PlayList?select=id,title,artist,album,genre,release_year,music_url,cover_image_url,description,display_order,audio_path,audio_filename,audio_size_bytes&is_active=eq.true&order=display_order.asc,created_at.desc`,
       {
-        headers: { apikey: config.secretKey },
+        headers: supabaseAuthHeaders(config),
         cache: "no-store",
       },
     );
@@ -58,6 +82,130 @@ export async function GET() {
     return json({ entries: playableEntries }, 200);
   } catch {
     return json({ entries: [] }, 200);
+  }
+}
+
+export async function PATCH(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return json({ error: "허용되지 않은 요청입니다." }, 403);
+  }
+
+  const user = await getChatGPTUser();
+  if (!user) return json({ error: "로그인이 필요합니다." }, 401);
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (!isLocalDevelopmentUser(user) && (!adminEmail || user.email.trim().toLowerCase() !== adminEmail)) {
+    return json({ error: "관리자 권한이 없습니다." }, 403);
+  }
+
+  if (!request.headers.get("content-type")?.includes("application/json")) {
+    return json({ error: "요청 형식이 올바르지 않습니다." }, 415);
+  }
+
+  let input: PlaylistInput;
+  try {
+    input = (await request.json()) as PlaylistInput;
+  } catch {
+    return json({ error: "입력 내용을 확인해 주세요." }, 400);
+  }
+
+  const id = text(input.id, 80);
+  if (!id || !validUuid(id)) return json({ error: "수정할 PLAYLIST 항목을 확인해 주세요." }, 400);
+
+  const title = text(input.title, 200);
+  const artist = text(input.artist, 160);
+  const genre = text(input.genre, 80);
+  if (!title) return json({ error: "곡 제목을 입력해 주세요." }, 400);
+  if (!artist) return json({ error: "아티스트를 입력해 주세요." }, 400);
+  if (!genre) return json({ error: "장르를 선택해 주세요." }, 400);
+
+  const releaseYear = optionalInteger(input.releaseYear, 1990, 2100);
+  const displayOrder = optionalInteger(input.displayOrder, 0, 9999) ?? 0;
+  if (releaseYear === undefined || displayOrder === undefined) {
+    return json({ error: "연도 또는 노출 순서를 확인해 주세요." }, 400);
+  }
+
+  const album = text(input.album, 200, true);
+  const description = text(input.description, 3000, true);
+  const musicUrl = text(input.musicUrl, 500, true);
+  const coverImageUrl = text(input.coverImageUrl, 500, true);
+  if (musicUrl && !safeUrl(musicUrl)) return json({ error: "음악 링크를 확인해 주세요." }, 400);
+  if (coverImageUrl && !safeUrl(coverImageUrl)) return json({ error: "커버 이미지 주소를 확인해 주세요." }, 400);
+
+  const audioPath = text(input.audioPath, 100, true);
+  const audioFilename = text(input.audioFilename, 240, true);
+  const audioSizeBytes = optionalInteger(input.audioSizeBytes, 1, MAX_AUDIO_SIZE);
+  if (audioSizeBytes === undefined) return json({ error: "MP3 파일 크기를 확인해 주세요." }, 400);
+  const hasAudioMetadata = Boolean(audioPath || audioFilename || audioSizeBytes !== null);
+  if (hasAudioMetadata && (!audioPath || !validAudioPath(audioPath) || !audioFilename || !audioSizeBytes)) {
+    return json({ error: "MP3 업로드 정보를 확인해 주세요." }, 400);
+  }
+
+  const config = getSupabaseConfig();
+  if (!config) return json({ error: "DB 및 파일 저장소 연결 설정이 완료되지 않았습니다." }, 503);
+
+  let previousAudioPath: string | null = null;
+  try {
+    const existingResult = await fetch(
+      `${config.url}/rest/v1/PlayList?id=eq.${encodeURIComponent(id)}&select=id,audio_path`,
+      { headers: supabaseAuthHeaders(config), cache: "no-store" },
+    );
+    if (!existingResult.ok) return json({ error: "수정할 항목을 확인하지 못했습니다." }, 502);
+    const existingRows = (await existingResult.json()) as Array<{ id: string; audio_path: string | null }>;
+    if (!existingRows[0]) return json({ error: "수정할 PLAYLIST 항목이 없습니다." }, 404);
+    previousAudioPath = existingRows[0].audio_path;
+  } catch {
+    return json({ error: "DB에 연결하지 못했습니다." }, 502);
+  }
+
+  const hasNewAudio = Boolean(audioPath && audioPath !== previousAudioPath);
+  if (hasNewAudio && audioPath && !(await verifyStoredMp3(config, audioPath))) {
+    await removeAudio(config, audioPath);
+    return json({ error: "새 MP3 파일이 올바르게 저장되지 않았습니다." }, 400);
+  }
+
+  const record = {
+    title,
+    artist,
+    album: album || null,
+    genre,
+    release_year: releaseYear,
+    music_url: musicUrl || null,
+    cover_image_url: coverImageUrl || null,
+    description,
+    display_order: displayOrder,
+    is_active: booleanValue(input.isActive, true),
+    audio_path: audioPath || null,
+    audio_filename: audioFilename || null,
+    audio_size_bytes: audioSizeBytes,
+  };
+
+  try {
+    const result = await fetch(
+      `${config.url}/rest/v1/PlayList?id=eq.${encodeURIComponent(id)}&select=id,title,artist,album,genre,release_year,display_order,is_active,audio_filename,audio_size_bytes,created_at`,
+      {
+        method: "PATCH",
+        headers: {
+          ...supabaseAuthHeaders(config),
+          "Content-Type": "application/json",
+          "Content-Profile": "public",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(record),
+      },
+    );
+    if (!result.ok) {
+      if (hasNewAudio && audioPath) await removeAudio(config, audioPath);
+      console.error("Supabase playlist update failed", result.status);
+      return json({ error: "PLAYLIST 수정 중 문제가 발생했습니다." }, 502);
+    }
+    const rows = (await result.json()) as Array<Record<string, unknown>>;
+    if (!rows[0]) return json({ error: "수정할 PLAYLIST 항목이 없습니다." }, 404);
+    if (previousAudioPath && previousAudioPath !== audioPath) await removeAudio(config, previousAudioPath);
+    return json({ entry: rows[0] }, 200);
+  } catch {
+    if (hasNewAudio && audioPath) await removeAudio(config, audioPath);
+    return json({ error: "DB에 연결하지 못했습니다." }, 502);
   }
 }
 
@@ -151,7 +299,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: {
-          apikey: config.secretKey,
+          ...supabaseAuthHeaders(config),
           "Content-Type": "application/json",
           "Content-Profile": "public",
           Prefer: "return=representation",
@@ -213,6 +361,14 @@ function getSupabaseConfig(): SupabaseConfig | null {
   return url && secretKey ? { url, secretKey } : null;
 }
 
+function supabaseAuthHeaders(config: SupabaseConfig) {
+  const headers: Record<string, string> = { apikey: config.secretKey };
+  if (config.secretKey.split(".").length === 3) {
+    headers.Authorization = `Bearer ${config.secretKey}`;
+  }
+  return headers;
+}
+
 async function createSignedUploadUrl(config: SupabaseConfig, path: string) {
   try {
     const result = await fetch(
@@ -220,7 +376,7 @@ async function createSignedUploadUrl(config: SupabaseConfig, path: string) {
       {
         method: "POST",
         headers: {
-          apikey: config.secretKey,
+          ...supabaseAuthHeaders(config),
           "Content-Type": "application/json",
           "x-upsert": "false",
         },
@@ -240,7 +396,7 @@ async function removeAudio(config: SupabaseConfig, path: string) {
   try {
     await fetch(`${config.url}/storage/v1/object/${AUDIO_BUCKET}/${encodeObjectPath(path)}`, {
       method: "DELETE",
-      headers: { apikey: config.secretKey },
+      headers: supabaseAuthHeaders(config),
     });
   } catch {
     console.error("Supabase audio cleanup failed");
@@ -271,7 +427,7 @@ async function createSignedPlaybackUrl(config: SupabaseConfig, path: string) {
       `${config.url}/storage/v1/object/sign/${AUDIO_BUCKET}/${encodeObjectPath(path)}`,
       {
         method: "POST",
-        headers: { apikey: config.secretKey, "Content-Type": "application/json" },
+        headers: { ...supabaseAuthHeaders(config), "Content-Type": "application/json" },
         body: JSON.stringify({ expiresIn: SIGNED_URL_SECONDS }),
         cache: "no-store",
       },
@@ -297,6 +453,10 @@ function encodeObjectPath(path: string) {
 
 function validAudioPath(path: string) {
   return /^playlist\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.mp3$/i.test(path);
+}
+
+function validUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function hasMp3Signature(bytes: Uint8Array) {

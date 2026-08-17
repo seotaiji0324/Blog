@@ -108,14 +108,6 @@ type PlaylistTrack = {
   uploadedAudio?: boolean;
 };
 
-const fallbackTracks: PlaylistTrack[] = [
-  { artist: "BTS", title: "Dynamite", mood: "DISCO POP", year: "2020" },
-  { artist: "NewJeans", title: "Super Shy", mood: "DANCE POP", year: "2023" },
-  { artist: "aespa", title: "Next Level", mood: "ELECTRO", year: "2021" },
-  { artist: "Stray Kids", title: "God’s Menu", mood: "HIP-HOP", year: "2020" },
-  { artist: "SEVENTEEN", title: "Very Nice", mood: "BRASS POP", year: "2016" },
-];
-
 const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
 
 export default function Home() {
@@ -123,14 +115,14 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
   const [letterOpen, setLetterOpen] = useState(false);
-  const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>(fallbackTracks);
+  const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
 
   useEffect(() => {
     let active = true;
     fetch("/api/playlist")
       .then((response) => response.json())
       .then((body: { entries?: Array<Record<string, unknown>> }) => {
-        if (!active || !body.entries?.length) return;
+        if (!active || !body.entries) return;
         setPlaylistTracks(
           body.entries.map((entry) => ({
             id: String(entry.id),
@@ -210,7 +202,7 @@ export default function Home() {
             </p>
             <div className="hero-actions">
               <a className="button button-dark" href="#stories">이야기 탐색하기 <span>↘</span></a>
-              <a className="text-link" href="#playlist">5곡으로 시작하기 <span>→</span></a>
+              <a className="text-link" href="#playlist">{playlistTracks.length}곡으로 시작하기 <span>→</span></a>
             </div>
           </div>
 
@@ -323,6 +315,12 @@ export default function Home() {
             </div>
           </div>
           <ol className="track-list">
+            {playlistTracks.length === 0 && (
+              <li className="playlist-empty">
+                <strong>등록된 PLAYLIST가 없습니다.</strong>
+                <span>관리자 페이지에서 곡을 등록하면 이곳에 자동으로 표시됩니다.</span>
+              </li>
+            )}
             {playlistTracks.map((track, index) => {
               const selected = queue.includes(track.title);
               return (

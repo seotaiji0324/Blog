@@ -80,6 +80,9 @@ export async function POST(request: Request) {
         method: "POST",
         headers: {
           apikey: supabaseSecretKey,
+          ...(supabaseSecretKey.split(".").length === 3
+            ? { Authorization: `Bearer ${supabaseSecretKey}` }
+            : {}),
           "Content-Type": "application/json",
           "Content-Profile": "public",
           Prefer: "return=representation",
