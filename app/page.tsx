@@ -109,6 +109,20 @@ type PlaylistTrack = {
 };
 
 const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
+const GITHUB_PAGES_BASE = "/Blog";
+const ADMIN_SITE_URL = "https://seoulwave-kpop-blog.samsungsdscoe.chatgpt.site/admin";
+
+function isGitHubPagesDeployment() {
+  return typeof window !== "undefined" && window.location.hostname === "seotaiji0324.github.io";
+}
+
+function publicPath(path: string) {
+  return isGitHubPagesDeployment() ? `${GITHUB_PAGES_BASE}${path}` : path;
+}
+
+function adminPath() {
+  return isGitHubPagesDeployment() ? ADMIN_SITE_URL : "/admin";
+}
 
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("전체");
@@ -119,7 +133,7 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/playlist")
+    fetch(publicPath(isGitHubPagesDeployment() ? "/playlist.json" : "/api/playlist"))
       .then((response) => response.json())
       .then((body: { entries?: Array<Record<string, unknown>> }) => {
         if (!active || !body.entries) return;
@@ -187,7 +201,7 @@ export default function Home() {
           <a href="#stories">STORIES</a>
           <a href="#playlist">PLAYLIST</a>
           <a href="#culture">CULTURE</a>
-          <a href="/admin">ADMIN</a>
+          <a href={adminPath()}>ADMIN</a>
         </nav>
         <a className="header-cta" href="#letter">WEEKLY DROP <span aria-hidden="true">↗</span></a>
       </header>
@@ -211,7 +225,7 @@ export default function Home() {
               alt="코발트 조명 아래 공연하는 가상의 K-pop 퍼포먼스 그룹"
               className="hero-photo"
               fetchPriority="high"
-              src="/hero-stage-v2.png"
+              src={publicPath("/hero-stage-v2.png")}
             />
             <div className="hero-image-meta" aria-hidden="true">
               <span>SEOUL / 22:14</span>
@@ -273,7 +287,7 @@ export default function Home() {
                     className="story-cover-image"
                     fill
                     sizes="(max-width: 700px) 100vw, (max-width: 980px) 50vw, 33vw"
-                    src={story.image}
+                    src={publicPath(story.image)}
                   />
                   <span className="cover-issue">SW / {story.id}</span>
                   <span className="cover-word">{story.issue.split(" ")[0]}</span>
@@ -403,7 +417,7 @@ export default function Home() {
         <div className="footer-brand">SEOUL<span>WAVE</span></div>
         <p>K-POP MUSIC, CULTURE &amp; STORIES<br />CURATED IN SEOUL.</p>
         <div className="footer-links">
-          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a><a href="/admin">ADMIN</a>
+          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a><a href={adminPath()}>ADMIN</a>
         </div>
         <small>© 2026 SEOULWAVE. EDITORIAL DEMO.</small>
       </footer>
