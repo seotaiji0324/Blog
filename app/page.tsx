@@ -1,0 +1,341 @@
+"use client";
+
+import { FormEvent, useMemo, useState } from "react";
+
+type Story = {
+  id: string;
+  issue: string;
+  category: "입문" | "사운드" | "퍼포먼스" | "팬덤";
+  englishCategory: string;
+  title: string;
+  summary: string;
+  readTime: string;
+  cover: string;
+  note: string;
+};
+
+const stories: Story[] = [
+  {
+    id: "01",
+    issue: "START HERE",
+    category: "입문",
+    englishCategory: "GUIDE",
+    title: "처음 만나는 K-pop, 무엇부터 들을까?",
+    summary: "멜로디, 퍼포먼스, 세계관. 취향을 찾는 가장 쉬운 세 갈래 입문 지도.",
+    readTime: "4 MIN",
+    cover: "cover-coral",
+    note: "한 곡의 후렴을 먼저 듣고, 무대 영상으로 안무를 본 뒤, 앨범 전체의 흐름을 따라가 보세요. K-pop은 소리와 이미지가 함께 완성되는 장르이기 때문에 이 세 단계를 오갈 때 매력이 가장 선명해집니다.",
+  },
+  {
+    id: "02",
+    issue: "SONIC LAYERS",
+    category: "사운드",
+    englishCategory: "SOUND",
+    title: "한 곡 안에서 장르가 바뀌는 순간",
+    summary: "힙합에서 일렉트로닉으로, 다시 팝으로. 역동적인 송폼을 듣는 방법.",
+    readTime: "6 MIN",
+    cover: "cover-blue",
+    note: "벌스와 프리코러스, 후렴의 리듬이 어떻게 달라지는지 표시하며 들어보세요. 서로 다른 장르를 이어 붙이는 전환부와, 모든 파트를 하나로 묶는 반복 훅이 K-pop 프로덕션의 긴장감을 만듭니다.",
+  },
+  {
+    id: "03",
+    issue: "ON STAGE",
+    category: "퍼포먼스",
+    englishCategory: "PERFORMANCE",
+    title: "카메라까지 춤추게 만드는 안무",
+    summary: "포인트 안무, 대형 변화, 표정 연기까지 무대를 읽는 세 가지 시선.",
+    readTime: "5 MIN",
+    cover: "cover-lime",
+    note: "전체 대형을 보는 고정 카메라와 표정을 담는 방송 카메라를 번갈아 비교해 보세요. 같은 안무도 시선의 방향과 화면 전환에 따라 전혀 다른 장면으로 읽힙니다.",
+  },
+  {
+    id: "04",
+    issue: "FAN LANGUAGE",
+    category: "팬덤",
+    englishCategory: "CULTURE",
+    title: "응원봉에서 떼창까지, 함께 만드는 무대",
+    summary: "관객이 소비자를 넘어 공연의 일부가 되는 K-pop 팬 문화 이야기.",
+    readTime: "7 MIN",
+    cover: "cover-violet",
+    note: "팬 컬러, 응원법, 생일 광고처럼 팬덤은 음악 밖에서도 고유한 언어를 만듭니다. 이 문화는 지역마다 새롭게 번역되며 K-pop을 세계적인 참여형 경험으로 확장합니다.",
+  },
+  {
+    id: "05",
+    issue: "VOCAL FOCUS",
+    category: "사운드",
+    englishCategory: "SOUND",
+    title: "목소리가 겹칠 때 생기는 색",
+    summary: "리드, 하모니, 애드리브를 따라가며 그룹 보컬의 층을 발견해 보세요.",
+    readTime: "5 MIN",
+    cover: "cover-yellow",
+    note: "처음에는 리드 보컬만, 두 번째에는 코러스와 낮게 깔린 화음을 들어보세요. 마지막 후렴에서 더해지는 애드리브까지 찾으면 한 곡의 감정선이 어떻게 커지는지 느낄 수 있습니다.",
+  },
+  {
+    id: "06",
+    issue: "VISUAL CODE",
+    category: "퍼포먼스",
+    englishCategory: "VISUAL",
+    title: "3분의 뮤직비디오에 숨은 세계",
+    summary: "색, 오브제, 편집 리듬으로 읽는 K-pop 비주얼 스토리텔링.",
+    readTime: "8 MIN",
+    cover: "cover-red",
+    note: "반복해서 등장하는 색과 오브제를 메모해 보세요. 가사와 직접 연결되지 않는 이미지도 편집의 속도와 화면 구도를 통해 곡의 정서를 강화하고 다음 이야기의 단서가 됩니다.",
+  },
+];
+
+const tracks = [
+  { artist: "BTS", title: "Dynamite", mood: "DISCO POP", year: "2020" },
+  { artist: "NewJeans", title: "Super Shy", mood: "DANCE POP", year: "2023" },
+  { artist: "aespa", title: "Next Level", mood: "ELECTRO", year: "2021" },
+  { artist: "Stray Kids", title: "God’s Menu", mood: "HIP-HOP", year: "2020" },
+  { artist: "SEVENTEEN", title: "Very Nice", mood: "BRASS POP", year: "2016" },
+];
+
+const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
+
+export default function Home() {
+  const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>("전체");
+  const [query, setQuery] = useState("");
+  const [queue, setQueue] = useState<string[]>([]);
+  const [letterOpen, setLetterOpen] = useState(false);
+
+  const filteredStories = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return stories.filter((story) => {
+      const matchesCategory = activeCategory === "전체" || story.category === activeCategory;
+      const matchesQuery =
+        !normalizedQuery ||
+        `${story.title} ${story.summary} ${story.category} ${story.englishCategory}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      return matchesCategory && matchesQuery;
+    });
+  }, [activeCategory, query]);
+
+  const toggleQueue = (title: string) => {
+    setQueue((current) =>
+      current.includes(title) ? current.filter((item) => item !== title) : [...current, title],
+    );
+  };
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    document.getElementById("stories")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  return (
+    <>
+      <a className="skip-link" href="#main-content">본문 바로가기</a>
+
+      <div className="ticker" aria-hidden="true">
+        <div className="ticker-track">
+          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
+          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
+          <span>K-POP / SOUND / STYLE / STORY / SEOUL</span>
+        </div>
+      </div>
+
+      <header className="site-header">
+        <a className="brand" href="#top" aria-label="Seoulwave 홈">
+          SEOUL<span>WAVE</span><sup>®</sup>
+        </a>
+        <nav aria-label="주요 메뉴">
+          <a href="#stories">STORIES</a>
+          <a href="#playlist">PLAYLIST</a>
+          <a href="#culture">CULTURE</a>
+        </nav>
+        <a className="header-cta" href="#letter">WEEKLY DROP <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <main id="main-content">
+        <section className="hero" id="top">
+          <div className="hero-copy">
+            <p className="eyebrow"><span>ISSUE 001</span> THE BEGINNER&apos;S EDIT</p>
+            <h1>K-POP IS<br />A WORLD<br />IN <em>MOTION.</em></h1>
+            <p className="hero-description">
+              노래 한 곡에서 시작해 무대, 스타일, 팬 문화까지.<br />K-pop을 더 깊고 재미있게 듣는 매거진.
+            </p>
+            <div className="hero-actions">
+              <a className="button button-dark" href="#stories">이야기 탐색하기 <span>↘</span></a>
+              <a className="text-link" href="#playlist">5곡으로 시작하기 <span>→</span></a>
+            </div>
+          </div>
+
+          <div className="hero-art" aria-label="네온 콘서트 무대를 연상시키는 추상 그래픽">
+            <div className="orbit orbit-one" />
+            <div className="orbit orbit-two" />
+            <div className="hero-disc">
+              <span>SEOUL</span><strong>WAVE</strong><span>PLAY IT LOUD</span>
+            </div>
+            <div className="art-card art-card-left">
+              <small>NOW PLAYING</small><strong>FEEL THE<br />RHYTHM</strong><span>33⅓ RPM</span>
+            </div>
+            <div className="art-card art-card-right">
+              <span className="barcode">|||| ||| ||||</span><strong>SEOUL<br />AFTER<br />DARK</strong><small>VOL. 01</small>
+            </div>
+            <div className="spark spark-one">✦</div>
+            <div className="spark spark-two">✦</div>
+          </div>
+        </section>
+
+        <section className="issue-strip" aria-label="이번 호 요약">
+          <div><span>CURATED STORIES</span><strong>06</strong></div>
+          <div><span>SOUNDS TO EXPLORE</span><strong>05</strong></div>
+          <div><span>LANGUAGE</span><strong>KR / EN</strong></div>
+          <div className="issue-stamp"><span>NEW DROP</span><strong>MONDAY</strong></div>
+        </section>
+
+        <section className="stories section-shell" id="stories">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">EDITOR&apos;S PICK / 에디터 추천</p>
+              <h2>READ THE<br /><em>WAVE</em></h2>
+            </div>
+            <p className="section-intro">
+              좋아하는 한 곡을 더 깊게 만드는 여섯 가지 관점. 익숙한 무대도 새로운 귀와 눈으로 다시 만나보세요.
+            </p>
+          </div>
+
+          <div className="story-tools">
+            <div className="filters" aria-label="글 카테고리 필터">
+              {categories.map((category) => (
+                <button
+                  className={activeCategory === category ? "active" : ""}
+                  key={category}
+                  onClick={() => setActiveCategory(category)}
+                  type="button"
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+            <form className="search" onSubmit={submitSearch} role="search">
+              <label className="sr-only" htmlFor="story-search">블로그 글 검색</label>
+              <input
+                id="story-search"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="SEARCH STORIES"
+                type="search"
+                value={query}
+              />
+              <button type="submit" aria-label="검색">⌕</button>
+            </form>
+          </div>
+
+          <div className="story-grid" aria-live="polite">
+            {filteredStories.map((story) => (
+              <article className="story-card" key={story.id}>
+                <div className={`story-cover ${story.cover}`}>
+                  <span className="cover-issue">SW / {story.id}</span>
+                  <span className="cover-word">{story.issue.split(" ")[0]}</span>
+                  <span className="cover-number">{story.id}</span>
+                  <span className="cover-mark">✦</span>
+                </div>
+                <div className="story-body">
+                  <div className="story-meta">
+                    <span>{story.category} / {story.englishCategory}</span><span>{story.readTime}</span>
+                  </div>
+                  <h3>{story.title}</h3>
+                  <p>{story.summary}</p>
+                  <details>
+                    <summary>READ NOTE <span aria-hidden="true">↗</span></summary>
+                    <p>{story.note}</p>
+                  </details>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {filteredStories.length === 0 && (
+            <div className="empty-state">
+              <strong>검색 결과가 없어요.</strong>
+              <span>다른 단어를 입력하거나 전체 카테고리를 선택해 보세요.</span>
+            </div>
+          )}
+        </section>
+
+        <section className="playlist" id="playlist">
+          <div className="playlist-copy">
+            <p className="eyebrow light">LISTENING ROOM / 입문 플레이리스트</p>
+            <h2>FIVE TRACKS.<br /><em>ONE BIG WAVE.</em></h2>
+            <p>
+              서로 다른 결의 다섯 곡으로 K-pop의 넓은 스펙트럼을 만나보세요. 재생 기능 대신 마음에 드는 곡을 나만의 큐에 담아둘 수 있습니다.
+            </p>
+            <div className="queue-counter" aria-live="polite">
+              <span>MY QUEUE</span><strong>{String(queue.length).padStart(2, "0")}</strong>
+            </div>
+          </div>
+          <ol className="track-list">
+            {tracks.map((track, index) => {
+              const selected = queue.includes(track.title);
+              return (
+                <li key={track.title}>
+                  <span className="track-index">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="track-name"><strong>{track.title}</strong><span>{track.artist}</span></div>
+                  <span className="track-mood">{track.mood} / {track.year}</span>
+                  <button
+                    aria-label={`${track.title} ${selected ? "큐에서 빼기" : "큐에 담기"}`}
+                    aria-pressed={selected}
+                    onClick={() => toggleQueue(track.title)}
+                    type="button"
+                  >
+                    {selected ? "✓" : "+"}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section className="culture section-shell" id="culture">
+          <div className="culture-title">
+            <div>
+              <p className="eyebrow">BEYOND THE MUSIC</p>
+              <h2>음악을 넘어,<br /><em>하나의 문화로.</em></h2>
+            </div>
+          </div>
+          <div className="culture-grid">
+            <article>
+              <span className="culture-number">01</span><div className="culture-icon">◉</div>
+              <h3>듣고 / LISTEN</h3><p>장르의 경계를 자유롭게 넘나드는 프로덕션과 목소리의 조합을 발견합니다.</p>
+            </article>
+            <article>
+              <span className="culture-number">02</span><div className="culture-icon">✣</div>
+              <h3>보고 / WATCH</h3><p>안무, 의상, 카메라 움직임이 음악과 만나 만드는 완성된 장면을 읽습니다.</p>
+            </article>
+            <article>
+              <span className="culture-number">03</span><div className="culture-icon">✦</div>
+              <h3>함께하고 / JOIN</h3><p>번역하고 응원하고 연결되는 팬들의 참여가 만드는 새로운 문화를 만납니다.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="letter" id="letter">
+          <div className="letter-star" aria-hidden="true">✦</div>
+          <p className="eyebrow">SEOULWAVE LETTER / EVERY MONDAY</p>
+          <h2>YOUR WEEKLY<br />DOSE OF <em>K-POP.</em></h2>
+          <p>매주 한 번, 놓치기 아쉬운 음악과 이야기를 골라 소개합니다.</p>
+          <button className="button button-dark" onClick={() => setLetterOpen(!letterOpen)} type="button">
+            {letterOpen ? "미리보기 닫기" : "이번 주 레터 미리보기"} <span>↗</span>
+          </button>
+          {letterOpen && (
+            <div className="letter-preview" aria-live="polite">
+              <span>WEEK 01</span>
+              <strong>“후렴 15초 전에 이미 시작되는 K-pop의 빌드업”</strong>
+              <p>레터 구독 연결 전의 미리보기입니다. 개인정보 입력 없이 콘텐츠 구성을 확인할 수 있어요.</p>
+            </div>
+          )}
+        </section>
+      </main>
+
+      <footer>
+        <div className="footer-brand">SEOUL<span>WAVE</span></div>
+        <p>K-POP MUSIC, CULTURE &amp; STORIES<br />CURATED IN SEOUL.</p>
+        <div className="footer-links">
+          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a>
+        </div>
+        <small>© 2026 SEOULWAVE. EDITORIAL DEMO.</small>
+      </footer>
+    </>
+  );
+}
