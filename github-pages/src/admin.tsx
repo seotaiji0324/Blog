@@ -38,7 +38,7 @@ const supabase = supabaseUrl && supabaseKey
 const genres = ["댄스 팝", "힙합", "R&B", "일렉트로닉", "록", "발라드", "기타"];
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
 const ADMIN_USERNAME = "seotaiji0324";
-const ADMIN_AUTH_EMAIL = `${ADMIN_USERNAME}@admin.seoulwave.app`;
+const ADMIN_AUTH_EMAIL = "hyunho76.seo@miracom-inc.com";
 
 function playlistWriteError(error: DatabaseError, editing: boolean) {
   if (error.code === "23502") return "필수 저장 항목이 비어 있습니다. 입력 내용을 확인해 주세요.";

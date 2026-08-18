@@ -108,6 +108,52 @@ type PlaylistTrack = {
   uploadedAudio?: boolean;
 };
 
+type WeeklyLetterItem = {
+  label: string;
+  title: string;
+  summary: string;
+  source: string;
+  sourceUrl: string;
+};
+
+type WeeklyLetterPayload = {
+  weekLabel: string;
+  updatedLabel: string;
+  headline: string;
+  intro: string;
+  entries: WeeklyLetterItem[];
+};
+
+const fallbackWeeklyLetter: WeeklyLetterPayload = {
+  weekLabel: "LAST VERIFIED · 2026.08.18",
+  updatedLabel: "WEB UPDATE TEMPORARILY DELAYED",
+  headline: "마지막으로 확인한 이번 주 K-pop 세 장면",
+  intro: "새 소식 조회가 지연되어 마지막으로 확인한 공식 정보를 먼저 보여드려요.",
+  entries: [
+    {
+      label: "OUT NOW · 08.17",
+      title: "TXT, 일본 5번째 싱글 ‘세츠나하나비’ 음원·MV 공개",
+      summary: "8월 19일 CD 발매에 앞서 17일 0시 음원과 타이틀곡 뮤직비디오가 먼저 공개됐어요.",
+      source: "UNIVERSAL MUSIC JAPAN",
+      sourceUrl: "https://www.universal-music.co.jp/txt/news/2026-07-23/",
+    },
+    {
+      label: "COMING · 08.21",
+      title: "ENHYPEN, 미니 8집 ‘THE SIN : BLISS’ 발매",
+      summary: "금요일에 공개되는 새 미니 앨범. 이번 주 후반의 컴백 레이더에서 가장 먼저 체크할 신보입니다.",
+      source: "WEVERSE",
+      sourceUrl: "https://weverse.io/enhypen/notice/37455",
+    },
+    {
+      label: "LIVE · 08.21—08.23",
+      title: "BIGBANG, 고양에서 20주년 월드투어 출발",
+      summary: "고양종합운동장에서 사흘간 열리는 공연으로 2026 월드투어의 문을 엽니다.",
+      source: "YG ENTERTAINMENT",
+      sourceUrl: "https://ygfamily.com/ko/news/report/7486",
+    },
+  ],
+};
+
 const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
 const GITHUB_PAGES_BASE = "/Blog";
 
@@ -132,6 +178,9 @@ export default function Home() {
   const [queuePlaying, setQueuePlaying] = useState(false);
   const [queueRepeat, setQueueRepeat] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
+  const [weeklyLetter, setWeeklyLetter] = useState<WeeklyLetterPayload>(fallbackWeeklyLetter);
+  const [letterLoading, setLetterLoading] = useState(false);
+  const [letterRefreshFailed, setLetterRefreshFailed] = useState(false);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const queueAudioRef = useRef<HTMLAudioElement>(null);
 
@@ -166,9 +215,24 @@ export default function Home() {
           return;
         }
         const response = await fetch(publicPath(pagesDeployment ? "/playlist.json" : "/api/playlist"), { cache: "no-store" });
-        applyPlaylist(await response.json());
+        const body = await response.json() as { entries?: Array<Record<string, unknown>> };
+        if (!pagesDeployment && (!body.entries || body.entries.length === 0)) {
+          const fallback = await fetch(publicPath("/dev-playlist.json"), { cache: "no-store" });
+          if (fallback.ok) applyPlaylist(await fallback.json());
+          return;
+        }
+        applyPlaylist(body);
       } catch {
-        if (!pagesDeployment || !playlistBridge) return;
+        if (!pagesDeployment) {
+          try {
+            const fallback = await fetch(publicPath("/dev-playlist.json"), { cache: "no-store" });
+            if (fallback.ok) applyPlaylist(await fallback.json());
+          } catch {
+            // Keep the last successfully loaded local playlist.
+          }
+          return;
+        }
+        if (!playlistBridge) return;
         try {
           const fallback = await fetch(publicPath("/playlist.json"), { cache: "no-store" });
           applyPlaylist(await fallback.json());
@@ -194,6 +258,39 @@ export default function Home() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);
+
+  useEffect(() => {
+    if (!letterOpen) return;
+    let active = true;
+
+    const loadWeeklyLetter = async () => {
+      setLetterLoading(true);
+      try {
+        const pagesDeployment = isGitHubPagesDeployment();
+        const localDevelopment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        const sourceUrl = pagesDeployment
+          ? publicPath("/weekly-letter.json")
+          : localDevelopment
+            ? "/dev-weekly-letter.json"
+            : "/api/weekly-letter";
+        const response = await fetch(sourceUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("Weekly letter request failed");
+        const payload = await response.json() as WeeklyLetterPayload;
+        if (!payload.entries || payload.entries.length < 3) throw new Error("Weekly letter response is incomplete");
+        if (active) {
+          setWeeklyLetter(payload);
+          setLetterRefreshFailed(false);
+        }
+      } catch {
+        if (active) setLetterRefreshFailed(true);
+      } finally {
+        if (active) setLetterLoading(false);
+      }
+    };
+
+    void loadWeeklyLetter();
+    return () => { active = false; };
+  }, [letterOpen]);
 
   const filteredStories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -541,10 +638,32 @@ export default function Home() {
             {letterOpen ? "미리보기 닫기" : "이번 주 레터 미리보기"} <span>↗</span>
           </button>
           {letterOpen && (
-            <div className="letter-preview" aria-live="polite">
-              <span>WEEK 01</span>
-              <strong>“후렴 15초 전에 이미 시작되는 K-pop의 빌드업”</strong>
-              <p>레터 구독 연결 전의 미리보기입니다. 개인정보 입력 없이 콘텐츠 구성을 확인할 수 있어요.</p>
+            <div className="letter-preview" aria-busy={letterLoading} aria-live="polite">
+              <div className="letter-preview-head">
+                <span>{weeklyLetter.weekLabel}</span>
+                <small>{letterLoading ? "WEB SEARCHING…" : weeklyLetter.updatedLabel}</small>
+              </div>
+              <strong className="letter-preview-title">{weeklyLetter.headline}</strong>
+              <p className="letter-preview-intro">{weeklyLetter.intro}</p>
+              <div className="letter-preview-list">
+                {weeklyLetter.entries.map((item) => (
+                  <article key={item.title}>
+                    <span>{item.label}</span>
+                    <h3>{item.title}</h3>
+                    <p>{item.summary}</p>
+                    <a href={item.sourceUrl} target="_blank" rel="noreferrer">
+                      {item.source}에서 확인 <b aria-hidden="true">↗</b>
+                    </a>
+                  </article>
+                ))}
+              </div>
+              <p className={`letter-preview-note${letterRefreshFailed ? " is-warning" : ""}`}>
+                {letterLoading
+                  ? "최근 7일의 K-pop 소식을 확인하고 있습니다."
+                  : letterRefreshFailed
+                    ? "실시간 조회가 지연되어 마지막 확인 내용을 표시합니다. 잠시 후 다시 열어 주세요."
+                    : "최근 7일의 웹 피드를 기준으로 6시간마다 자동 갱신됩니다. 원문에서 세부 일정을 다시 확인해 주세요."}
+              </p>
             </div>
           )}
         </section>

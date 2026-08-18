@@ -42,3 +42,5 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+/public/dev-playlist.json
+/public/dev-weekly-letter.json

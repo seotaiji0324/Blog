@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createWeeklyLetterPayload, WEEKLY_LETTER_FEED_URL } from "./weekly-letter-data.mjs";
 
 const outputDirectory = path.resolve("pages-dist");
 const outputFile = path.join(outputDirectory, "playlist.json");
@@ -39,13 +40,23 @@ const entries = await Promise.all(rows.map(async (row) => ({
   playback_url: row.audio_path ? await createSignedPlaybackUrl(row.audio_path) : null,
 })));
 
+const weeklyLetterResponse = await fetch(WEEKLY_LETTER_FEED_URL, {
+  headers: { Accept: "application/rss+xml, application/xml, text/xml" },
+});
+if (!weeklyLetterResponse.ok) {
+  throw new Error(`Weekly letter feed failed with HTTP ${weeklyLetterResponse.status}.`);
+}
+const weeklyLetter = createWeeklyLetterPayload(await weeklyLetterResponse.text());
+
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(outputFile, `${JSON.stringify({ entries })}\n`, "utf8"),
+  writeFile(path.join(outputDirectory, "weekly-letter.json"), `${JSON.stringify(weeklyLetter)}\n`, "utf8"),
   writeFile(path.join(outputDirectory, ".nojekyll"), "", "utf8"),
 ]);
 
 console.log(`Created GitHub Pages playlist snapshot with ${entries.length} active tracks.`);
+console.log(`Created GitHub Pages weekly letter with ${weeklyLetter.entries.length} current stories.`);
 
 async function createSignedPlaybackUrl(audioPath) {
   const encodedPath = audioPath.split("/").map(encodeURIComponent).join("/");
