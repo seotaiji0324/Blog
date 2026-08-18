@@ -6,7 +6,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "predev": "node --use-env-proxy --env-file-if-exists=.env.local scripts/sync-dev-playlist.mjs && node --use-env-proxy scripts/sync-dev-weekly-letter.mjs",
+    "predev": "node --use-env-proxy --env-file-if-exists=.env.local scripts/sync-dev-playlist.mjs && node --use-env-proxy scripts/sync-dev-weekly-letter.mjs && node --use-env-proxy scripts/sync-dev-culture-links.mjs",
     "dev": "node --use-env-proxy ./node_modules/vinext/dist/cli.js dev",
     "build": "vinext build",
     "build:pages": "vite build --config pages.vite.config.ts && node --env-file-if-exists=.env.local scripts/build-pages-data.mjs",

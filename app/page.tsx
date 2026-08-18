@@ -124,6 +124,43 @@ type WeeklyLetterPayload = {
   entries: WeeklyLetterItem[];
 };
 
+type TicketItem = {
+  id: string;
+  artist: string;
+  title: string;
+  dateLabel: string;
+  dateDetail: string;
+  city: string;
+  venue: string;
+  ticketStatus: string;
+  ticketing: string;
+  source: string;
+  sourceUrl: string;
+};
+
+type TicketPayload = {
+  updatedLabel: string;
+  headline: string;
+  intro: string;
+  entries: TicketItem[];
+};
+
+type CultureLinkItem = {
+  id: "listen" | "watch" | "join";
+  koreanLabel: string;
+  englishLabel: string;
+  description: string;
+  articleLabel: string;
+  articleTitle: string;
+  source: string;
+  sourceUrl: string;
+};
+
+type CultureLinksPayload = {
+  updatedLabel: string;
+  entries: CultureLinkItem[];
+};
+
 const fallbackWeeklyLetter: WeeklyLetterPayload = {
   weekLabel: "LAST VERIFIED · 2026.08.18",
   updatedLabel: "WEB UPDATE TEMPORARILY DELAYED",
@@ -154,6 +191,104 @@ const fallbackWeeklyLetter: WeeklyLetterPayload = {
   ],
 };
 
+const fallbackTickets: TicketPayload = {
+  updatedLabel: "SOURCE VERIFIED · 2026.08.18",
+  headline: "NEXT STAGE,\nRIGHT ON TIME.",
+  intro: "공식 공지를 기준으로 지금 가장 가까운 K-pop 공연과 투어 일정을 모았습니다. 예매 전에는 반드시 원문에서 잔여석과 변경 사항을 확인해 주세요.",
+  entries: [
+    {
+      id: "bigbang-goyang-2026",
+      artist: "BIGBANG",
+      title: "2026 WORLD TOUR IN GOYANG",
+      dateLabel: "AUG 21—23",
+      dateDetail: "08.21 FRI 19:30 · 08.22 SAT 19:30 · 08.23 SUN 19:00",
+      city: "GOYANG",
+      venue: "고양종합운동장",
+      ticketStatus: "GENERAL SALE",
+      ticketing: "쿠팡플레이 · NOL WORLD",
+      source: "YG ENTERTAINMENT",
+      sourceUrl: "https://www.ygfamily.com/ko/news/notice/5876",
+    },
+    {
+      id: "stayc-seoul-2026",
+      artist: "STAYC",
+      title: "FAN CONCERT TOUR [STAY CLOSER]",
+      dateLabel: "AUG 22—23",
+      dateDetail: "08.22 SAT 18:00 · 08.23 SUN 17:00",
+      city: "SEOUL",
+      venue: "블루스퀘어 우리WON뱅킹홀",
+      ticketStatus: "OFFICIAL NOTICE",
+      ticketing: "공식 공지에서 예매 정보 확인",
+      source: "WEVERSE",
+      sourceUrl: "https://weverse.io/stayc/notice/37102",
+    },
+    {
+      id: "bts-toronto-2026",
+      artist: "BTS",
+      title: "WORLD TOUR ‘ARIRANG’",
+      dateLabel: "AUG 22—23",
+      dateDetail: "08.22 SAT · 08.23 SUN",
+      city: "TORONTO",
+      venue: "ROGERS STADIUM",
+      ticketStatus: "COMING SOON",
+      ticketing: "Weverse Spot 공연 상세",
+      source: "WEVERSE SPOT",
+      sourceUrl: "https://spot.weverse.io/bts-arirang-tour?language=en",
+    },
+    {
+      id: "tws-fukuoka-2026",
+      artist: "TWS",
+      title: "TOUR ‘24/7:FOR:YOU’",
+      dateLabel: "AUG 28—30",
+      dateDetail: "08.28 FRI — 08.30 SUN",
+      city: "FUKUOKA",
+      venue: "FUKUOKA KOKUSAI CENTER",
+      ticketStatus: "TOUR DATE",
+      ticketing: "공식 공지에서 상세 일정 확인",
+      source: "WEVERSE",
+      sourceUrl: "https://weverse.io/tws/notice/35444",
+    },
+  ],
+};
+
+const fallbackCultureLinks: CultureLinksPayload = {
+  updatedLabel: "LAST VERIFIED · 2026.08.18",
+  entries: [
+    {
+      id: "listen",
+      koreanLabel: "듣고",
+      englishLabel: "LISTEN",
+      description: "새 앨범과 싱글, 목소리와 프로덕션을 더 깊게 들여다보는 최신 음악 이야기입니다.",
+      articleLabel: "NEW RELEASE · 08.17",
+      articleTitle: "TXT, 일본 싱글 ‘세츠나하나비’ 음원과 뮤직비디오 공개",
+      source: "UNIVERSAL MUSIC JAPAN",
+      sourceUrl: "https://www.universal-music.co.jp/txt/news/2026-07-23/",
+    },
+    {
+      id: "watch",
+      koreanLabel: "보고",
+      englishLabel: "WATCH",
+      description: "무대와 안무, 뮤직비디오와 라이브 퍼포먼스의 새로운 장면을 읽습니다.",
+      articleLabel: "LIVE · 08.21—23",
+      articleTitle: "BIGBANG 2026 WORLD TOUR IN GOYANG 공연 안내",
+      source: "YG ENTERTAINMENT",
+      sourceUrl: "https://www.ygfamily.com/ko/news/notice/5876",
+    },
+    {
+      id: "join",
+      koreanLabel: "함께하고",
+      englishLabel: "JOIN",
+      description: "팬미팅과 응원, 팝업과 커뮤니티처럼 팬들이 함께 만드는 문화의 최신 소식입니다.",
+      articleLabel: "FAN CON · 08.22—23",
+      articleTitle: "STAYC FAN CONCERT TOUR [STAY CLOSER] 서울 공연",
+      source: "WEVERSE",
+      sourceUrl: "https://weverse.io/stayc/notice/37102",
+    },
+  ],
+};
+
+const cultureIcons = { listen: "◉", watch: "✣", join: "✦" } as const;
+
 const categories = ["전체", "입문", "사운드", "퍼포먼스", "팬덤"] as const;
 const GITHUB_PAGES_BASE = "/Blog";
 
@@ -181,6 +316,12 @@ export default function Home() {
   const [weeklyLetter, setWeeklyLetter] = useState<WeeklyLetterPayload>(fallbackWeeklyLetter);
   const [letterLoading, setLetterLoading] = useState(false);
   const [letterRefreshFailed, setLetterRefreshFailed] = useState(false);
+  const [ticketFeed, setTicketFeed] = useState<TicketPayload>(fallbackTickets);
+  const [ticketLoading, setTicketLoading] = useState(true);
+  const [ticketRefreshFailed, setTicketRefreshFailed] = useState(false);
+  const [cultureLinks, setCultureLinks] = useState<CultureLinksPayload>(fallbackCultureLinks);
+  const [cultureLoading, setCultureLoading] = useState(true);
+  const [cultureRefreshFailed, setCultureRefreshFailed] = useState(false);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const queueAudioRef = useRef<HTMLAudioElement>(null);
 
@@ -292,6 +433,90 @@ export default function Home() {
     return () => { active = false; };
   }, [letterOpen]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadTickets = async () => {
+      setTicketLoading(true);
+      try {
+        const sourceUrl = isGitHubPagesDeployment() ? publicPath("/ticket-news.json") : "/api/tickets";
+        const response = await fetch(sourceUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("Ticket feed request failed");
+        const payload = await response.json() as TicketPayload;
+        if (!payload.entries || payload.entries.length < 4) throw new Error("Ticket feed response is incomplete");
+        if (active) {
+          setTicketFeed(payload);
+          setTicketRefreshFailed(false);
+        }
+      } catch {
+        if (active) setTicketRefreshFailed(true);
+      } finally {
+        if (active) setTicketLoading(false);
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void loadTickets();
+    };
+
+    void loadTickets();
+    const refreshTimer = window.setInterval(() => void loadTickets(), 6 * 60 * 60 * 1000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCultureLinks = async () => {
+      setCultureLoading(true);
+      try {
+        const pagesDeployment = isGitHubPagesDeployment();
+        const localDevelopment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        const sourceUrl = pagesDeployment
+          ? publicPath("/culture-links.json")
+          : localDevelopment
+            ? "/dev-culture-links.json"
+            : "/api/culture-links";
+        const response = await fetch(sourceUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("Culture links request failed");
+        const payload = await response.json() as CultureLinksPayload;
+        if (!payload.entries || payload.entries.length < 3) throw new Error("Culture links response is incomplete");
+        if (active) {
+          setCultureLinks(payload);
+          setCultureRefreshFailed(false);
+        }
+      } catch {
+        if (active) setCultureRefreshFailed(true);
+      } finally {
+        if (active) setCultureLoading(false);
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void loadCultureLinks();
+    };
+
+    void loadCultureLinks();
+    const refreshTimer = window.setInterval(() => void loadCultureLinks(), 6 * 60 * 60 * 1000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
   const filteredStories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return stories.filter((story) => {
@@ -394,6 +619,7 @@ export default function Home() {
           <a href="#stories">STORIES</a>
           <a href="#playlist">PLAYLIST</a>
           <a href="#culture">CULTURE</a>
+          <a href="#tickets">TICKET</a>
           <a href={adminPath()}>ADMIN</a>
         </nav>
         <a className="header-cta" href="#letter">WEEKLY DROP <span aria-hidden="true">↗</span></a>
@@ -612,21 +838,69 @@ export default function Home() {
               <p className="eyebrow">BEYOND THE MUSIC</p>
               <h2>음악을 넘어,<br /><em>하나의 문화로.</em></h2>
             </div>
+            <span className={`culture-live${cultureRefreshFailed ? " is-warning" : ""}`}>
+              <i aria-hidden="true" />
+              {cultureLoading ? "FINDING LATEST STORIES…" : cultureRefreshFailed ? "LAST VERIFIED LINKS" : cultureLinks.updatedLabel}
+            </span>
           </div>
-          <div className="culture-grid">
-            <article>
-              <span className="culture-number">01</span><div className="culture-icon">◉</div>
-              <h3>듣고 / LISTEN</h3><p>장르의 경계를 자유롭게 넘나드는 프로덕션과 목소리의 조합을 발견합니다.</p>
-            </article>
-            <article>
-              <span className="culture-number">02</span><div className="culture-icon">✣</div>
-              <h3>보고 / WATCH</h3><p>안무, 의상, 카메라 움직임이 음악과 만나 만드는 완성된 장면을 읽습니다.</p>
-            </article>
-            <article>
-              <span className="culture-number">03</span><div className="culture-icon">✦</div>
-              <h3>함께하고 / JOIN</h3><p>번역하고 응원하고 연결되는 팬들의 참여가 만드는 새로운 문화를 만납니다.</p>
-            </article>
+          <div className="culture-grid" aria-busy={cultureLoading} aria-live="polite">
+            {cultureLinks.entries.map((item, index) => (
+              <article key={item.id}>
+                <span className="culture-number">{String(index + 1).padStart(2, "0")}</span>
+                <div className="culture-icon">{cultureIcons[item.id]}</div>
+                <h3>{item.koreanLabel} / {item.englishLabel}</h3>
+                <p>{item.description}</p>
+                <a className="culture-link" href={item.sourceUrl} target="_blank" rel="noreferrer">
+                  <small>{item.articleLabel}</small>
+                  <strong>{item.articleTitle}</strong>
+                  <span>{item.source}에서 읽기 <b aria-hidden="true">↗</b></span>
+                </a>
+              </article>
+            ))}
           </div>
+        </section>
+
+        <section className="tickets section-shell" id="tickets">
+          <div className="ticket-heading">
+            <div>
+              <p className="eyebrow light">LIVE RADAR / 최신 공연 정보</p>
+              <h2>NEXT STAGE,<br /><em>RIGHT ON TIME.</em></h2>
+            </div>
+            <div className="ticket-intro">
+              <p>{ticketFeed.intro}</p>
+              <span className={`ticket-update${ticketRefreshFailed ? " is-warning" : ""}`}>
+                <i aria-hidden="true" />
+                {ticketLoading ? "CHECKING OFFICIAL NEWS…" : ticketRefreshFailed ? "LAST VERIFIED SCHEDULE" : ticketFeed.updatedLabel}
+              </span>
+            </div>
+          </div>
+
+          <div className="ticket-grid" aria-busy={ticketLoading} aria-live="polite">
+            {ticketFeed.entries.map((event, index) => (
+              <article className="ticket-card" key={event.id}>
+                <div className="ticket-card-top">
+                  <span>{String(index + 1).padStart(2, "0")} / {event.city}</span>
+                  <strong>{event.dateLabel}</strong>
+                </div>
+                <div className="ticket-card-copy">
+                  <span className="ticket-artist">{event.artist}</span>
+                  <h3>{event.title}</h3>
+                </div>
+                <dl>
+                  <div><dt>DATE</dt><dd>{event.dateDetail}</dd></div>
+                  <div><dt>VENUE</dt><dd>{event.venue}</dd></div>
+                  <div><dt>TICKET</dt><dd>{event.ticketing}</dd></div>
+                </dl>
+                <div className="ticket-card-bottom">
+                  <span>{event.ticketStatus}</span>
+                  <a href={event.sourceUrl} target="_blank" rel="noreferrer">
+                    {event.source} <b aria-hidden="true">↗</b>
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+          <p className="ticket-disclaimer">공연 일정과 예매 상태는 주최사 사정에 따라 변경될 수 있습니다. 구매 전 공식 공지를 확인하세요.</p>
         </section>
 
         <section className="letter" id="letter">
@@ -673,7 +947,7 @@ export default function Home() {
         <div className="footer-brand">SEOUL<span>WAVE</span></div>
         <p>K-POP MUSIC, CULTURE &amp; STORIES<br />CURATED IN SEOUL.</p>
         <div className="footer-links">
-          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a><a href={adminPath()}>ADMIN</a>
+          <a href="#stories">STORIES</a><a href="#playlist">PLAYLIST</a><a href="#culture">ABOUT</a><a href="#tickets">TICKET</a><a href={adminPath()}>ADMIN</a>
         </div>
         <small>© 2026 SEOULWAVE. EDITORIAL DEMO.</small>
       </footer>

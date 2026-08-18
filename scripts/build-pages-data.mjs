@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createCultureLinksPayload } from "./culture-data.mjs";
 import { createWeeklyLetterPayload, WEEKLY_LETTER_FEED_URL } from "./weekly-letter-data.mjs";
+import { createTicketPayload } from "./ticket-data.mjs";
 
 const outputDirectory = path.resolve("pages-dist");
 const outputFile = path.join(outputDirectory, "playlist.json");
@@ -46,17 +48,24 @@ const weeklyLetterResponse = await fetch(WEEKLY_LETTER_FEED_URL, {
 if (!weeklyLetterResponse.ok) {
   throw new Error(`Weekly letter feed failed with HTTP ${weeklyLetterResponse.status}.`);
 }
-const weeklyLetter = createWeeklyLetterPayload(await weeklyLetterResponse.text());
+const weeklyLetterXml = await weeklyLetterResponse.text();
+const weeklyLetter = createWeeklyLetterPayload(weeklyLetterXml);
+const cultureLinks = createCultureLinksPayload(weeklyLetterXml);
+const ticketNews = createTicketPayload();
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   writeFile(outputFile, `${JSON.stringify({ entries })}\n`, "utf8"),
   writeFile(path.join(outputDirectory, "weekly-letter.json"), `${JSON.stringify(weeklyLetter)}\n`, "utf8"),
+  writeFile(path.join(outputDirectory, "culture-links.json"), `${JSON.stringify(cultureLinks)}\n`, "utf8"),
+  writeFile(path.join(outputDirectory, "ticket-news.json"), `${JSON.stringify(ticketNews)}\n`, "utf8"),
   writeFile(path.join(outputDirectory, ".nojekyll"), "", "utf8"),
 ]);
 
 console.log(`Created GitHub Pages playlist snapshot with ${entries.length} active tracks.`);
 console.log(`Created GitHub Pages weekly letter with ${weeklyLetter.entries.length} current stories.`);
+console.log(`Created GitHub Pages culture links for ${cultureLinks.entries.length} editorial paths.`);
+console.log(`Created GitHub Pages ticket radar with ${ticketNews.entries.length} upcoming events.`);
 
 async function createSignedPlaybackUrl(audioPath) {
   const encodedPath = audioPath.split("/").map(encodeURIComponent).join("/");
