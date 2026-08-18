@@ -55,18 +55,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  publish-sites-source:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Push validated source to Sites
-        env:
-          SITES_SOURCE_TOKEN: ${{ secrets.SITES_SOURCE_TOKEN }}
-        run: |
-          git -c http.extraHeader="Authorization: Bearer ${SITES_SOURCE_TOKEN}" \
-            push "https://git.chatgpt-team.site/b1493303-7617-416e-bbce-a68b3ddcd1c6/appgprj_6a831d390a8481c297dcaf9ebd58b27c.git" "HEAD:main"
