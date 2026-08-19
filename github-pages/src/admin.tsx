@@ -28,7 +28,12 @@ type MemberProfile = { username: string; email: string | null; role: string; is_
 type DatabaseError = { code?: string };
 type RecoveryIndex = {
   version: number;
-  entries: Array<{ emailHash: string; username: string }>;
+  entries: Array<{
+    recoveryEmailHash: string;
+    usernameHash: string;
+    usernameCipher: string;
+    authEmailCipher: string;
+  }>;
 };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
@@ -39,15 +44,50 @@ const supabase = supabaseUrl && supabaseKey
     })
   : null;
 
+let recoveryIndexPromise: Promise<RecoveryIndex | null> | null = null;
+
+async function hashRecoveryValue(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadRecoveryIndex() {
+  recoveryIndexPromise ??= fetch(`${import.meta.env.BASE_URL}admin-recovery.json`, { cache: "no-store" })
+    .then((response) => response.ok ? response.json() as Promise<RecoveryIndex> : null)
+    .catch(() => null);
+  return recoveryIndexPromise;
+}
+
+async function openRecoveryValue(ciphertext: string, keyMaterial: string) {
+  const base64 = ciphertext.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(ciphertext.length / 4) * 4, "=");
+  const sealed = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  const iv = sealed.slice(0, 12);
+  const encrypted = sealed.slice(12);
+  const keyBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(keyMaterial));
+  const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+  return new TextDecoder().decode(plaintext);
+}
+
 async function findUsernameInRecoveryIndex(email: string) {
   try {
     const normalizedEmail = email.trim().toLowerCase();
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizedEmail));
-    const emailHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const response = await fetch(`${import.meta.env.BASE_URL}admin-recovery.json`, { cache: "no-store" });
-    if (!response.ok) return null;
-    const index = await response.json() as RecoveryIndex;
-    return index.entries?.find((entry) => entry.emailHash === emailHash)?.username ?? null;
+    const index = await loadRecoveryIndex();
+    const emailHash = await hashRecoveryValue(normalizedEmail);
+    const match = index?.entries?.find((entry) => entry.recoveryEmailHash === emailHash);
+    return match ? await openRecoveryValue(match.usernameCipher, normalizedEmail) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function findAuthEmailInRecoveryIndex(username: string) {
+  try {
+    const normalizedUsername = username.trim().toLowerCase();
+    const index = await loadRecoveryIndex();
+    const usernameHash = await hashRecoveryValue(normalizedUsername);
+    const match = index?.entries?.find((entry) => entry.usernameHash === usernameHash);
+    return match ? await openRecoveryValue(match.authEmailCipher, normalizedUsername) : null;
   } catch {
     return null;
   }
@@ -174,10 +214,13 @@ function Login() {
     setSigningIn(true);
     setNotice(null);
     const normalizedUsername = username.trim().toLowerCase();
-    const { data: authEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
+    const { data: rpcAuthEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
       p_username: normalizedUsername,
     });
-    if (lookupError || typeof authEmail !== "string" || !authEmail) {
+    const authEmail = !lookupError && typeof rpcAuthEmail === "string" && rpcAuthEmail
+      ? rpcAuthEmail
+      : await findAuthEmailInRecoveryIndex(normalizedUsername);
+    if (!authEmail) {
       setSigningIn(false);
       setNotice({ tone: "error", text: "관리자 사용자명 또는 비밀번호를 확인해 주세요." });
       return;
@@ -214,10 +257,13 @@ function Login() {
     setSigningIn(true);
     setNotice(null);
     const normalizedUsername = username.trim().toLowerCase();
-    const { data: authEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
+    const { data: rpcAuthEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
       p_username: normalizedUsername,
     });
-    if (lookupError || typeof authEmail !== "string" || !authEmail) {
+    const authEmail = !lookupError && typeof rpcAuthEmail === "string" && rpcAuthEmail
+      ? rpcAuthEmail
+      : await findAuthEmailInRecoveryIndex(normalizedUsername);
+    if (!authEmail) {
       setSigningIn(false);
       setNotice({ tone: "error", text: "member 테이블에 등록된 관리자 아이디를 확인해 주세요." });
       return;
