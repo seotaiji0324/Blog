@@ -37,8 +37,6 @@ const supabase = supabaseUrl && supabaseKey
 
 const genres = ["댄스 팝", "힙합", "R&B", "일렉트로닉", "록", "발라드", "기타"];
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
-const ADMIN_USERNAME = "seotaiji0324";
-const ADMIN_AUTH_EMAIL = "hyunho76.seo@miracom-inc.com";
 
 function playlistWriteError(error: DatabaseError, editing: boolean) {
   if (error.code === "23502") return "필수 저장 항목이 비어 있습니다. 입력 내용을 확인해 주세요.";
@@ -49,6 +47,7 @@ function playlistWriteError(error: DatabaseError, editing: boolean) {
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(Boolean(supabase));
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -57,9 +56,10 @@ function App() {
       setSession(data.session);
       setAuthLoading(false);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       setAuthLoading(false);
+      if (event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -70,16 +70,13 @@ function App() {
   if (authLoading) {
     return <Shell><StatusCard title="관리자 세션 확인 중" text="보안 연결을 확인하고 있습니다." loading /></Shell>;
   }
-  if (!session) return <Login />;
-  if (session.user.app_metadata?.role !== "admin") {
-    return (
-      <Shell>
-        <StatusCard title="관리자 권한이 없습니다" text="허용된 SEOULWAVE 관리자 계정으로 다시 로그인해 주세요.">
-          <button className="button primary" onClick={() => void supabase.auth.signOut()} type="button">다른 계정으로 로그인</button>
-        </StatusCard>
-      </Shell>
-    );
+  if (passwordRecovery && session) {
+    return <PasswordReset onComplete={() => {
+      setPasswordRecovery(false);
+      void supabase.auth.signOut();
+    }} />;
   }
+  if (!session) return <Login />;
   return <MemberGate session={session} />;
 }
 
@@ -101,7 +98,7 @@ function MemberGate({ session }: { session: Session }) {
   }, [session.user.id]);
 
   if (loading) return <Shell><StatusCard title="관리자 권한 확인 중" text="member 테이블과 인증 역할을 확인하고 있습니다." loading /></Shell>;
-  if (!member || member.username !== ADMIN_USERNAME || member.role !== "admin" || !member.is_active) {
+  if (!member || member.role !== "admin" || !member.is_active) {
     return (
       <Shell>
         <StatusCard title="관리자 권한이 없습니다" text="활성화된 SEOULWAVE 관리자 계정으로 다시 로그인해 주세요.">
@@ -110,7 +107,7 @@ function MemberGate({ session }: { session: Session }) {
       </Shell>
     );
   }
-  return <Dashboard session={session} />;
+  return <Dashboard member={member} session={session} />;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -148,6 +145,8 @@ function StatusCard({ children, loading, text, title }: { children?: React.React
 function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState<"username" | "password" | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
@@ -156,17 +155,56 @@ function Login() {
     if (!supabase) return;
     setSigningIn(true);
     setNotice(null);
-    if (username.trim().toLowerCase() !== ADMIN_USERNAME) {
+    const normalizedUsername = username.trim().toLowerCase();
+    const { data: authEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
+      p_username: normalizedUsername,
+    });
+    if (lookupError || typeof authEmail !== "string" || !authEmail) {
       setSigningIn(false);
       setNotice({ tone: "error", text: "관리자 사용자명 또는 비밀번호를 확인해 주세요." });
       return;
     }
-    const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_AUTH_EMAIL, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
     setSigningIn(false);
     if (error) {
       setPassword("");
       setNotice({ tone: "error", text: "관리자 사용자명 또는 비밀번호를 확인해 주세요." });
     }
+  };
+
+  const recoverUsername = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase) return;
+    setSigningIn(true);
+    setNotice(null);
+    const { data, error } = await supabase.rpc("find_member_username", { p_email: email.trim().toLowerCase() });
+    setSigningIn(false);
+    if (error || typeof data !== "string" || !data) {
+      setNotice({ tone: "error", text: "등록된 관리자 계정을 찾지 못했습니다." });
+      return;
+    }
+    setNotice({ tone: "success", text: `관리자 아이디는 ${data} 입니다.` });
+  };
+
+  const sendPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase) return;
+    setSigningIn(true);
+    setNotice(null);
+    const redirectTo = new URL("/Blog/admin/", window.location.origin).toString();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
+    setSigningIn(false);
+    if (error) {
+      setNotice({ tone: "error", text: "비밀번호 재설정 메일을 보내지 못했습니다." });
+      return;
+    }
+    setNotice({ tone: "success", text: "등록 이메일로 비밀번호 재설정 링크를 보냈습니다." });
+  };
+
+  const closeRecovery = () => {
+    setRecoveryMode(null);
+    setEmail("");
+    setNotice(null);
   };
 
   return (
@@ -182,20 +220,39 @@ function Login() {
             <div><dt>03</dt><dd>PLAYLIST 안전 저장</dd></div>
           </dl>
         </div>
-        <form className="login-card" onSubmit={signIn}>
+        <form className="login-card" onSubmit={recoveryMode === "username" ? recoverUsername : recoveryMode === "password" ? sendPasswordReset : signIn}>
           <span>SEOULWAVE CONTROL ROOM</span>
-          <h2>관리자 로그인</h2>
-          <p>등록된 관리자 사용자명과 비밀번호로 로그인해 주세요.</p>
-          <label>
-            <span>ADMIN USERNAME</span>
-            <input autoCapitalize="none" autoComplete="username" name="username" onChange={(event) => setUsername(event.target.value)} placeholder="관리자 사용자명" required value={username} />
-          </label>
-          <label>
-            <span>PASSWORD</span>
-            <input autoComplete="current-password" name="password" onChange={(event) => setPassword(event.target.value)} placeholder="비밀번호" required type="password" value={password} />
-          </label>
-          <button className="button primary" disabled={signingIn} type="submit">{signingIn ? "권한 확인 중..." : "관리자 로그인"}<b>↗</b></button>
+          <h2>{recoveryMode === "username" ? "관리자 아이디 찾기" : recoveryMode === "password" ? "비밀번호 재설정" : "관리자 로그인"}</h2>
+          <p>{recoveryMode ? "member 테이블에 연결된 관리자 이메일을 입력해 주세요." : "member 테이블에 등록된 사용자명과 비밀번호로 로그인해 주세요."}</p>
+          {recoveryMode ? (
+            <label>
+              <span>REGISTERED EMAIL</span>
+              <input autoCapitalize="none" autoComplete="email" name="email" onChange={(event) => setEmail(event.target.value)} placeholder="관리자 등록 이메일" required type="email" value={email} />
+            </label>
+          ) : (
+            <>
+              <label>
+                <span>ADMIN USERNAME</span>
+                <input autoCapitalize="none" autoComplete="username" name="username" onChange={(event) => setUsername(event.target.value)} placeholder="관리자 사용자명" required value={username} />
+              </label>
+              <label>
+                <span>PASSWORD</span>
+                <input autoComplete="current-password" name="password" onChange={(event) => setPassword(event.target.value)} placeholder="비밀번호" required type="password" value={password} />
+              </label>
+            </>
+          )}
+          <button className="button primary" disabled={signingIn} type="submit">
+            {signingIn ? "처리 중..." : recoveryMode === "username" ? "아이디 확인" : recoveryMode === "password" ? "재설정 메일 보내기" : "관리자 로그인"}<b>↗</b>
+          </button>
           {notice && <p className={`notice ${notice.tone}`} role="status">{notice.text}</p>}
+          {recoveryMode ? (
+            <button className="recovery-back" onClick={closeRecovery} type="button">로그인으로 돌아가기</button>
+          ) : (
+            <div className="recovery-links">
+              <button onClick={() => { setRecoveryMode("username"); setNotice(null); }} type="button">아이디 찾기</button>
+              <button onClick={() => { setRecoveryMode("password"); setNotice(null); }} type="button">비밀번호 찾기</button>
+            </div>
+          )}
           <small>비밀번호는 Supabase Auth에서만 검증되며 member 테이블이나 브라우저에 저장하지 않습니다.</small>
         </form>
       </section>
@@ -203,7 +260,62 @@ function Login() {
   );
 }
 
-function Dashboard({ session }: { session: Session }) {
+function PasswordReset({ onComplete }: { onComplete: () => void }) {
+  return (
+    <Shell>
+      <section className="status-card password-reset-card">
+        <span className="eyebrow">SECURE ADMINISTRATION</span>
+        <div className="status-icon">SW</div>
+        <h1>새 비밀번호 설정</h1>
+        <p>재설정 링크가 확인되었습니다. 새로운 관리자 비밀번호를 입력해 주세요.</p>
+        <PasswordForm onSuccess={onComplete} />
+      </section>
+    </Shell>
+  );
+}
+
+function PasswordForm({ onSuccess }: { onSuccess?: () => void }) {
+  const [nextPassword, setNextPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  const updatePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase) return;
+    setNotice(null);
+    if (nextPassword.length < 10) {
+      setNotice({ tone: "error", text: "비밀번호는 10자 이상으로 입력해 주세요." });
+      return;
+    }
+    if (nextPassword !== confirmation) {
+      setNotice({ tone: "error", text: "새 비밀번호가 서로 일치하지 않습니다." });
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: nextPassword });
+    setSaving(false);
+    if (error) {
+      setNotice({ tone: "error", text: "비밀번호를 변경하지 못했습니다. 다시 로그인한 뒤 시도해 주세요." });
+      return;
+    }
+    setNextPassword("");
+    setConfirmation("");
+    setNotice({ tone: "success", text: "관리자 비밀번호를 변경했습니다." });
+    onSuccess?.();
+  };
+
+  return (
+    <form className="password-form" onSubmit={updatePassword}>
+      <label><span>NEW PASSWORD</span><input autoComplete="new-password" minLength={10} onChange={(event) => setNextPassword(event.target.value)} required type="password" value={nextPassword} /></label>
+      <label><span>CONFIRM PASSWORD</span><input autoComplete="new-password" minLength={10} onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} /></label>
+      <button className="button secondary" disabled={saving} type="submit">{saving ? "변경 중..." : "비밀번호 변경"}</button>
+      {notice && <p className={`notice ${notice.tone}`} role="status">{notice.text}</p>}
+    </form>
+  );
+}
+
+function Dashboard({ member, session }: { member: MemberProfile; session: Session }) {
   const [entries, setEntries] = useState<PlaylistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -329,8 +441,12 @@ function Dashboard({ session }: { session: Session }) {
         </div>
         <div className="session-card">
           <span>AUTHENTICATED</span>
-          <strong>관리자 세션 연결됨</strong>
-          <small>SUPABASE AUTH · RLS ACTIVE</small>
+          <strong>{member.username}</strong>
+          <small>MEMBER · {member.role.toUpperCase()} · RLS ACTIVE</small>
+          <details className="account-tools">
+            <summary>비밀번호 변경</summary>
+            <PasswordForm />
+          </details>
           <button onClick={() => void supabase?.auth.signOut()} type="button">로그아웃</button>
         </div>
       </section>

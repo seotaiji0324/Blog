@@ -43,6 +43,9 @@ footer { border-top:1px solid var(--ink); font:500 .62rem "DM Mono",monospace; l
 .login-card input:focus { border-color:var(--violet-soft); }
 .login-card .button { background:var(--violet-soft); color:var(--ink); width:100%; }
 .login-card small { color:rgba(255,255,255,.4); display:block; font-size:.65rem; line-height:1.6; margin-top:1.5rem; }
+.recovery-links { display:flex; gap:1rem; justify-content:center; margin-top:1.15rem; }
+.recovery-links button,.recovery-back { background:none; border:0; color:var(--violet-soft); cursor:pointer; font:500 .64rem "DM Mono",monospace; padding:.25rem; text-decoration:underline; text-underline-offset:3px; }
+.recovery-back { display:block; margin:1rem auto 0; }
 .notice { border-left:2px solid currentColor; margin:1rem 0 0!important; padding:.3rem 0 .3rem .8rem; }
 .notice.success { color:var(--green)!important; }.notice.error { color:#ff9d9d!important; }
 .status-card { margin:8vh auto; max-width:720px; text-align:center; }
@@ -57,6 +60,16 @@ footer { border-top:1px solid var(--ink); font:500 .62rem "DM Mono",monospace; l
 .session-card { background:var(--ink); color:white; display:grid; gap:.8rem; padding:1.5rem; }
 .session-card>span,.session-card>small { color:var(--violet-soft); font:500 .6rem "DM Mono",monospace; letter-spacing:.08em; }
 .session-card button { background:none; border:0; border-top:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.65); cursor:pointer; font:500 .65rem "DM Mono",monospace; margin-top:.4rem; padding:1rem 0 0; text-align:left; }
+.account-tools { border-top:1px solid rgba(255,255,255,.18); margin-top:.35rem; padding-top:.8rem; }
+.account-tools summary { color:var(--violet-soft); cursor:pointer; font:500 .62rem "DM Mono",monospace; }
+.password-form { display:grid; gap:.7rem; margin-top:1rem; text-align:left; }
+.password-form label { display:grid; gap:.35rem; }
+.password-form label span { color:var(--violet-soft); font:500 .56rem "DM Mono",monospace; letter-spacing:.06em; }
+.password-form input { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.25); color:white; min-height:42px; outline:none; padding:0 .75rem; width:100%; }
+.password-form input:focus { border-color:var(--violet-soft); }
+.session-card .password-form button { border:1px solid rgba(255,255,255,.28); margin:0; padding:.7rem; text-align:center; }
+.password-reset-card .password-form { margin:2rem auto 0; max-width:420px; }
+.password-reset-card .password-form button { border-color:rgba(255,255,255,.28); color:white; justify-content:center; }
 .workspace { align-items:start; display:grid; gap:2rem; grid-template-columns:minmax(0,1fr) 310px; }
 .playlist-form { background:white; border:1px solid var(--line); padding:clamp(1.5rem,4vw,3rem); }
 .playlist-form.editing { box-shadow:inset 5px 0 0 var(--violet); }
