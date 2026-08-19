@@ -12,7 +12,7 @@ set email = lower(btrim(u.email)),
 from auth.users as u
 where u.id = m.auth_user_id
   and u.email is not null
-  and m.email is distinct from lower(btrim(u.email));
+  and (m.email is null or btrim(m.email) = '');
 
 create unique index if not exists member_email_lower_unique
   on public.member (lower(email))

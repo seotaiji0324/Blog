@@ -26,6 +26,10 @@ type PlaylistEntry = {
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
 type MemberProfile = { username: string; email: string | null; role: string; is_active: boolean };
 type DatabaseError = { code?: string };
+type RecoveryIndex = {
+  version: number;
+  entries: Array<{ emailHash: string; username: string }>;
+};
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -34,6 +38,20 @@ const supabase = supabaseUrl && supabaseKey
       auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
     })
   : null;
+
+async function findUsernameInRecoveryIndex(email: string) {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizedEmail));
+    const emailHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const response = await fetch(`${import.meta.env.BASE_URL}admin-recovery.json`, { cache: "no-store" });
+    if (!response.ok) return null;
+    const index = await response.json() as RecoveryIndex;
+    return index.entries?.find((entry) => entry.emailHash === emailHash)?.username ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const genres = ["댄스 팝", "힙합", "R&B", "일렉트로닉", "록", "발라드", "기타"];
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
@@ -177,13 +195,17 @@ function Login() {
     if (!supabase) return;
     setSigningIn(true);
     setNotice(null);
-    const { data, error } = await supabase.rpc("find_member_username", { p_email: email.trim().toLowerCase() });
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.rpc("find_member_username", { p_email: normalizedEmail });
+    const recoveredUsername = !error && typeof data === "string" && data
+      ? data
+      : await findUsernameInRecoveryIndex(normalizedEmail);
     setSigningIn(false);
-    if (error || typeof data !== "string" || !data) {
+    if (!recoveredUsername) {
       setNotice({ tone: "error", text: "등록된 관리자 계정을 찾지 못했습니다." });
       return;
     }
-    setNotice({ tone: "success", text: `관리자 아이디는 ${data} 입니다.` });
+    setNotice({ tone: "success", text: `관리자 아이디는 ${recoveredUsername} 입니다.` });
   };
 
   const sendPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
