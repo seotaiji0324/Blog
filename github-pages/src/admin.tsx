@@ -24,7 +24,7 @@ type PlaylistEntry = {
 };
 
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
-type MemberProfile = { username: string; role: string; is_active: boolean };
+type MemberProfile = { username: string; email: string | null; role: string; is_active: boolean };
 type DatabaseError = { code?: string };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
@@ -88,7 +88,7 @@ function MemberGate({ session }: { session: Session }) {
     if (!supabase) return;
     void supabase
       .from("member")
-      .select("username,role,is_active")
+      .select("username,email,role,is_active")
       .eq("auth_user_id", session.user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -191,18 +191,28 @@ function Login() {
     if (!supabase) return;
     setSigningIn(true);
     setNotice(null);
+    const normalizedUsername = username.trim().toLowerCase();
+    const { data: authEmail, error: lookupError } = await supabase.rpc("resolve_member_login", {
+      p_username: normalizedUsername,
+    });
+    if (lookupError || typeof authEmail !== "string" || !authEmail) {
+      setSigningIn(false);
+      setNotice({ tone: "error", text: "member 테이블에 등록된 관리자 아이디를 확인해 주세요." });
+      return;
+    }
     const redirectTo = new URL("/Blog/admin/", window.location.origin).toString();
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, { redirectTo });
     setSigningIn(false);
     if (error) {
       setNotice({ tone: "error", text: "비밀번호 재설정 메일을 보내지 못했습니다." });
       return;
     }
-    setNotice({ tone: "success", text: "등록 이메일로 비밀번호 재설정 링크를 보냈습니다." });
+    setNotice({ tone: "success", text: "연결된 Supabase Auth 이메일로 비밀번호 재설정 링크를 보냈습니다." });
   };
 
   const closeRecovery = () => {
     setRecoveryMode(null);
+    setUsername("");
     setEmail("");
     setNotice(null);
   };
@@ -223,11 +233,16 @@ function Login() {
         <form className="login-card" onSubmit={recoveryMode === "username" ? recoverUsername : recoveryMode === "password" ? sendPasswordReset : signIn}>
           <span>SEOULWAVE CONTROL ROOM</span>
           <h2>{recoveryMode === "username" ? "관리자 아이디 찾기" : recoveryMode === "password" ? "비밀번호 재설정" : "관리자 로그인"}</h2>
-          <p>{recoveryMode ? "member 테이블에 연결된 관리자 이메일을 입력해 주세요." : "member 테이블에 등록된 사용자명과 비밀번호로 로그인해 주세요."}</p>
-          {recoveryMode ? (
+          <p>{recoveryMode === "username" ? "member.email 컬럼에 등록된 관리자 이메일을 입력해 주세요." : recoveryMode === "password" ? "비밀번호를 재설정할 관리자 아이디를 입력해 주세요." : "member 테이블에 등록된 사용자명과 비밀번호로 로그인해 주세요."}</p>
+          {recoveryMode === "username" ? (
             <label>
               <span>REGISTERED EMAIL</span>
               <input autoCapitalize="none" autoComplete="email" name="email" onChange={(event) => setEmail(event.target.value)} placeholder="관리자 등록 이메일" required type="email" value={email} />
+            </label>
+          ) : recoveryMode === "password" ? (
+            <label>
+              <span>ADMIN USERNAME</span>
+              <input autoCapitalize="none" autoComplete="username" name="username" onChange={(event) => setUsername(event.target.value)} placeholder="관리자 사용자명" required value={username} />
             </label>
           ) : (
             <>
@@ -442,6 +457,7 @@ function Dashboard({ member, session }: { member: MemberProfile; session: Sessio
         <div className="session-card">
           <span>AUTHENTICATED</span>
           <strong>{member.username}</strong>
+          {member.email && <small>{member.email}</small>}
           <small>MEMBER · {member.role.toUpperCase()} · RLS ACTIVE</small>
           <details className="account-tools">
             <summary>비밀번호 변경</summary>
