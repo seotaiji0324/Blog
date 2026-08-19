@@ -41,6 +41,8 @@ const entries = await Promise.all(
       && typeof member.username === "string"
     ))
     .map(async (member) => {
+      const recoveryEmail = member.email.trim().toLowerCase();
+      const username = member.username.trim().toLowerCase();
       const authResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(member.auth_user_id)}`, {
         headers: {
           apikey: secretKey,
@@ -51,13 +53,28 @@ const entries = await Promise.all(
         throw new Error(`Could not resolve Supabase Auth user (${authResponse.status}).`);
       }
       const authPayload = await authResponse.json();
-      const authUser = authPayload.user ?? authPayload;
+      let authUser = authPayload.user ?? authPayload;
       if (typeof authUser.email !== "string") {
         throw new Error("The linked Supabase Auth user does not have an email address.");
       }
 
-      const recoveryEmail = member.email.trim().toLowerCase();
-      const username = member.username.trim().toLowerCase();
+      if (authUser.email.trim().toLowerCase() !== recoveryEmail) {
+        const updateResponse = await fetch(`${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(member.auth_user_id)}`, {
+          method: "PUT",
+          headers: {
+            apikey: secretKey,
+            authorization: `Bearer ${secretKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ email: recoveryEmail, email_confirm: true }),
+        });
+        if (!updateResponse.ok) {
+          throw new Error(`Could not synchronize the Supabase Auth recovery email (${updateResponse.status}).`);
+        }
+        const updatePayload = await updateResponse.json();
+        authUser = updatePayload.user ?? updatePayload;
+      }
+
       const authEmail = authUser.email.trim().toLowerCase();
       return {
         recoveryEmailHash: createHash("sha256").update(recoveryEmail).digest("hex"),
